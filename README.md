@@ -1,6 +1,6 @@
 # GPT Image Playground
 
-🎨 基于 OpenAI `gpt-image-2` 接口的图片生成与编辑工具。提供简洁的 Web UI，支持文本生成图片、参考图编辑、可视化参数调节、历史记录管理与本地数据导入导出。
+基于 OpenAI `gpt-image-2` 接口的图片生成与编辑工具。提供简洁的 Web UI，支持文本生成图片、参考图编辑、可视化参数调节、历史记录管理与本地数据导入导出。
 
 **在线体验：** [https://cooksleep.github.io/gpt_image_playground/](https://cooksleep.github.io/gpt_image_playground/)
 
@@ -8,9 +8,19 @@
 
 ## 📸 示例截图
 
-| 主界面 | 任务详情 |
-| :---: | :---: |
-| <img src="docs/images/example_1.png" alt="主界面" /> | <img src="docs/images/example_2.png" alt="任务详情" /> |
+<div align="center">
+  <b>主界面</b><br>
+  <img src="docs/images/example_1.png" alt="主界面" />
+</div>
+
+<br>
+
+<div align="center">
+  <b>任务详情</b><br>
+  <img src="docs/images/example_2.png" alt="任务详情" />
+</div>
+
+<br>
 
 <div align="center">
   <b>移动端适配</b><br>
@@ -36,7 +46,7 @@
 - **瀑布流任务卡片**：直观展示生成缩略图、提示词、参数和耗时。支持按状态筛选与关键词搜索。
 - **快速复用**：一键将历史记录的配置与提示词回填到输入框。
 - **迭代生成**：支持将生成的输出结果直接添加到参考图列表中，进行下一轮迭代编辑。
-- **画廊与详情**：点击任务卡片可查看完整输入输出，支持灯箱大图浏览。
+- **画廊与详情**：点击任务卡片可查看完整输入输出，支持大图浏览。
 - **快捷操作**：支持图片右键或移动端长按唤出自定义菜单，快速复制或下载图片。
 
 ### 💾 本地数据优先
@@ -122,7 +132,11 @@ services:
 - `?apiUrl=https://你的代理地址.com`
 - `?apiKey=sk-xxxx`
 
-*(注：参数会在成功应用后自动从地址栏中隐藏，保护隐私)*
+例如：
+- 接入 New API 聊天应用：
+  ```
+  https://cooksleep.github.io/gpt_image_playground?apiUrl={address}&apiKey={key}
+  ```
 
 ---
 
@@ -137,3 +151,7 @@ services:
 ## 📄 许可证
 
 [MIT License](LICENSE)
+
+## 🔗 致谢
+
+[LINUX DO](https://linux.do)
