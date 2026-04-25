@@ -1,4 +1,5 @@
 import type { AppSettings, ImageApiResponse, TaskParams } from '../types'
+import { buildApiUrl, readClientDevProxyConfig } from './devProxy'
 
 const MIME_MAP: Record<string, string> = {
   png: 'image/png',
@@ -6,27 +7,7 @@ const MIME_MAP: Record<string, string> = {
   webp: 'image/webp',
 }
 
-export function normalizeBaseUrl(baseUrl: string): string {
-  const trimmed = baseUrl.trim()
-  if (!trimmed) return ''
-
-  const input = /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//.test(trimmed)
-    ? trimmed
-    : `https://${trimmed}`
-
-  try {
-    const url = new URL(input)
-    return `${url.protocol}//${url.host}`
-  } catch {
-    return trimmed.replace(/\/+$/, '')
-  }
-}
-
-function buildUrl(baseUrl: string, path: string): string {
-  const normalizedBaseUrl = normalizeBaseUrl(baseUrl)
-  const apiPath = ['v1', path.replace(/^\/+/, '')].join('/')
-  return normalizedBaseUrl ? `${normalizedBaseUrl}/${apiPath}` : `/${apiPath}`
-}
+export { normalizeBaseUrl } from './devProxy'
 
 function isHttpUrl(value: unknown): value is string {
   return typeof value === 'string' && /^https?:\/\//i.test(value)
@@ -78,6 +59,7 @@ export async function callImageApi(opts: CallApiOptions): Promise<CallApiResult>
   const { settings, prompt, params, inputImageDataUrls } = opts
   const isEdit = inputImageDataUrls.length > 0
   const mime = MIME_MAP[params.output_format] || 'image/png'
+  const proxyConfig = readClientDevProxyConfig()
   const requestHeaders = {
     Authorization: `Bearer ${settings.apiKey}`,
     'Cache-Control': 'no-store, no-cache, max-age=0',
@@ -111,7 +93,7 @@ export async function callImageApi(opts: CallApiOptions): Promise<CallApiResult>
         formData.append('image[]', blob, `input-${i + 1}.${ext}`)
       }
 
-      response = await fetch(buildUrl(settings.baseUrl, 'images/edits'), {
+      response = await fetch(buildApiUrl(settings.baseUrl, 'images/edits', proxyConfig), {
         method: 'POST',
         headers: requestHeaders,
         cache: 'no-store',
@@ -135,7 +117,7 @@ export async function callImageApi(opts: CallApiOptions): Promise<CallApiResult>
         body.n = params.n
       }
 
-      response = await fetch(buildUrl(settings.baseUrl, 'images/generations'), {
+      response = await fetch(buildApiUrl(settings.baseUrl, 'images/generations', proxyConfig), {
         method: 'POST',
         headers: {
           ...requestHeaders,

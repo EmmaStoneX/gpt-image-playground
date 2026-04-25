@@ -117,7 +117,24 @@ services:
    ```
    随后浏览器访问 `http://localhost:5173`。
 
-3. **构建静态产物**
+3. **开发环境跨域代理（可选）**
+   如果你的图片接口节点没有放开浏览器跨域，先复制示例配置：
+   ```bash
+   cp dev-proxy.config.example.json dev-proxy.config.json
+   ```
+   然后修改项目根目录下的本地 `dev-proxy.config.json`：
+   ```json
+   {
+     "enabled": true,
+     "prefix": "/api-proxy",
+     "target": "http://127.0.0.1:3000",
+     "changeOrigin": true,
+     "secure": false
+   }
+   ```
+   然后在页面设置中的 `API URL` 填入与 `target` 相同的地址。开发服务器会把请求改写为同源代理路径，例如 `/api-proxy/v1/images/generations`，从而绕开浏览器 CORS 限制。
+
+4. **构建静态产物**
    ```bash
    npm run build
    ```
