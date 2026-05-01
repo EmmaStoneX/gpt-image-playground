@@ -8,6 +8,7 @@ import { normalizeImageSize } from '../lib/size'
 import { createMaskPreviewDataUrl } from '../lib/canvasImage'
 import Select from './Select'
 import SizePickerModal from './SizePickerModal'
+import { MobileSafeImage } from './MobileSafeImage'
 import ViewportTooltip from './ViewportTooltip'
 
 /** 通用悬浮气泡提示 */
@@ -843,7 +844,7 @@ export default function InputBar() {
           }}
         >
           {displaySrc && (
-            <img
+            <MobileSafeImage
               src={displaySrc}
               className="w-full h-full object-cover hover:opacity-90 transition-opacity pointer-events-none"
               alt=""
@@ -919,7 +920,7 @@ export default function InputBar() {
             className="fixed z-[140] h-[52px] w-[52px] overflow-hidden rounded-xl shadow-xl pointer-events-none opacity-90"
             style={{ left: touchDragPreview.x, top: touchDragPreview.y, transform: 'translate(-50%, -50%)' }}
           >
-            <img src={touchDragPreview.src} className="h-full w-full object-cover" alt="" />
+            <MobileSafeImage src={touchDragPreview.src} className="h-full w-full object-cover" alt="" />
           </div>,
           document.body,
         )}

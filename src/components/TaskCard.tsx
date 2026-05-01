@@ -3,6 +3,7 @@ import type { TaskRecord } from '../types'
 import { useStore, getCachedImage, ensureImageCached, updateTaskInStore, retryTask } from '../store'
 import { formatImageRatio } from '../lib/size'
 import { ParamValue } from '../lib/paramDisplay'
+import { MobileSafeImage } from './MobileSafeImage'
 
 interface Props {
   task: TaskRecord
@@ -296,7 +297,7 @@ export default function TaskCard({
           )}
           {task.status === 'done' && thumbSrc && (
             <>
-              <img
+              <MobileSafeImage
                 src={thumbSrc}
                 className="saveable-image w-full h-full object-cover"
                 loading="lazy"

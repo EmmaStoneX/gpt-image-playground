@@ -3,6 +3,7 @@ import { useStore, getCachedImage, ensureImageCached, reuseConfig, editOutputs, 
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { formatImageRatio } from '../lib/size'
 import { ActualValueBadge, DetailParamValue } from '../lib/paramDisplay'
+import { MobileSafeImage } from './MobileSafeImage'
 import { copyBlobToClipboard, copyTextToClipboard, getClipboardFailureMessage } from '../lib/clipboard'
 import { createMaskPreviewDataUrl } from '../lib/canvasImage'
 
@@ -294,7 +295,7 @@ export default function DetailModal() {
         <div ref={imagePanelRef} className="md:w-1/2 w-full h-64 md:h-auto bg-gray-100 dark:bg-black/20 relative flex items-center justify-center flex-shrink-0 min-h-[16rem]">
           {task.status === 'done' && outputLen > 0 && currentOutputImageSrc && (
             <>
-              <img
+              <MobileSafeImage
                 ref={mainImageRef}
                 src={currentOutputImageSrc}
                 className="saveable-image max-w-[calc(100%-2rem)] max-h-[calc(100%-2rem)] object-contain cursor-pointer"
@@ -517,7 +518,7 @@ export default function DetailModal() {
                           onClick={() => setLightboxImageId(imgId, allInputImageIds)}
                         >
                           {displaySrc && (
-                            <img
+                            <MobileSafeImage
                               src={displaySrc}
                               className="w-full h-full object-cover"
                               alt=""
