@@ -10,6 +10,44 @@ function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v))
 }
 
+/**
+ * 把 dataURL 转成 blob URL，仅用于 <img src> 显示。
+ *
+ * 背景：部分移动浏览器（已知 Alook）在长按 <img src="data:..."> 元素时，
+ * 浏览器原生会同步解码超长 base64 字符串以准备"保存图片"等操作，
+ * 大图（>1MB）会直接卡死渲染进程。改用 blob URL 后浏览器只读短引用，
+ * 不会触发同步解码。
+ *
+ * dataURL 加载完成前先返回原 dataURL 以避免空白闪烁；blob URL ready
+ * 后会自动切换。
+ */
+function useBlobUrlFromDataUrl(dataUrl: string): string {
+  const [blobUrl, setBlobUrl] = useState('')
+  useEffect(() => {
+    if (!dataUrl || !dataUrl.startsWith('data:')) {
+      setBlobUrl('')
+      return
+    }
+    let cancelled = false
+    let url = ''
+    fetch(dataUrl)
+      .then((r) => r.blob())
+      .then((blob) => {
+        if (cancelled) return
+        url = URL.createObjectURL(blob)
+        setBlobUrl(url)
+      })
+      .catch(() => {
+        if (!cancelled) setBlobUrl('')
+      })
+    return () => {
+      cancelled = true
+      if (url) URL.revokeObjectURL(url)
+    }
+  }, [dataUrl])
+  return blobUrl
+}
+
 export default function Lightbox() {
   const lightboxImageId = useStore((s) => s.lightboxImageId)
   const lightboxImageList = useStore((s) => s.lightboxImageList)
@@ -113,12 +151,17 @@ export default function Lightbox() {
     return () => window.removeEventListener('keydown', onKey)
   }, [lightboxImageId, showNav, goPrev, goNext])
 
+  // 给 <img> 用的 blob URL（防 Alook 等浏览器长按 dataURL 卡死）。
+  // 业务逻辑（mask 预览生成、菜单复制/下载/编辑）继续走 dataURL。
+  const displaySrc = useBlobUrlFromDataUrl(src)
+  const displayMaskPreviewSrc = useBlobUrlFromDataUrl(maskPreviewSrc)
+
   if (!lightboxImageId || !src) return null
 
   return (
     <LightboxInner
-      src={src}
-      maskPreviewSrc={maskPreviewSrc}
+      src={displaySrc || src}
+      maskPreviewSrc={displayMaskPreviewSrc || maskPreviewSrc}
       onClose={close}
       showNav={showNav}
       currentIndex={currentIndex}
