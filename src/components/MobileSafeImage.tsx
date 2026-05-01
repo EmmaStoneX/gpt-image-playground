@@ -1,4 +1,4 @@
-import { forwardRef, ImgHTMLAttributes } from 'react'
+import { forwardRef, type ImgHTMLAttributes } from 'react'
 import { useBlobUrlFromDataUrl } from '../hooks/useBlobUrlFromDataUrl'
 
 /**
