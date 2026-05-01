@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Alook 下载兼容性测试</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; font-family: -apple-system, system-ui, sans-serif; font-size: 14px; }
+  .btn-row { padding: 8px; display: flex; flex-wrap: wrap; gap: 6px; background: #fafafa; border-bottom: 1px solid #ddd; }
+  button { padding: 10px 12px; font-size: 13px; border: 1px solid #888; border-radius: 6px; background: #fff; cursor: pointer; }
+  button:active { background: #ddd; }
+  button.primary { background: #06c; color: #fff; border-color: #06c; }
+  #stat { padding: 6px 10px; background: #fff8d0; border-bottom: 1px solid #e0c060; font-family: ui-monospace, Menlo, monospace; font-size: 11px; line-height: 1.4; }
+  #stat.warn { background: #ffd0d0; border-bottom-color: #c00; }
+  #log { padding: 6px 10px; font-family: ui-monospace, Menlo, monospace; font-size: 11px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+  #log > div { padding: 1px 0; }
+  .err { color: #c00; font-weight: bold; }
+  .ok  { color: #060; }
+  .info{ color: #06c; font-weight: bold; }
+  .step{ color: #555; }
+  #preview { display: none; max-width: 100%; padding: 10px; }
+</style>
+</head>
+<body>
+<div class="btn-row">
+  <button class="primary" onclick="prepareImage()">0. 准备图片</button>
+  <button onclick="test1()">①fetch+立即revoke</button>
+  <button onclick="test2()">②fetch+延迟revoke</button>
+  <button onclick="test3()">③直接dataURL</button>
+  <button onclick="test4()">④长按保存</button>
+  <button onclick="clearLog()">清空</button>
+</div>
+<div id="stat">RAF: -- | mem: -- | dataURL: --</div>
+<div id="log"></div>
+<canvas id="cv" width="2048" height="2048" style="display:none"></canvas>
+<img id="preview">
+
+<script>
+const $log = document.getElementById('log')
+const $stat = document.getElementById('stat')
+const $cv = document.getElementById('cv')
+const $preview = document.getElementById('preview')
+
+let dataUrl = null
+
+function fmtBytes(n) {
+  if (n == null) return 'n/a'
+  if (n < 1024) return n + 'B'
+  if (n < 1024*1024) return (n/1024).toFixed(1) + 'KB'
+  return (n/1024/1024).toFixed(2) + 'MB'
+}
+function ts() {
+  const d = new Date()
+  return d.toTimeString().slice(0,8) + '.' + String(d.getMilliseconds()).padStart(3,'0')
+}
+function mem() {
+  if (performance.memory) return fmtBytes(performance.memory.usedJSHeapSize)
+  return 'n/a'
+}
+function log(msg, cls) {
+  const line = document.createElement('div')
+  line.className = cls || 'step'
+  line.textContent = '[' + ts() + '] [mem ' + mem() + '] ' + msg
+  $log.appendChild(line)
+  // 强制 reflow，保证卡死前已渲染到屏幕
+  void $log.offsetHeight
+}
+function clearLog() { $log.innerHTML = '' }
+
+// RAF 心跳
+let lastFrame = performance.now()
+let maxGap = 0
+let frameCount = 0
+function tick() {
+  const t = performance.now()
+  const gap = t - lastFrame
+  if (gap > maxGap) maxGap = gap
+  lastFrame = t
+  frameCount++
+  // 每 10 帧刷新一次状态栏，避免占用主线程
+  if (frameCount % 10 === 0) {
+    $stat.textContent =
+      'RAF gap ' + gap.toFixed(0) + 'ms (max ' + maxGap.toFixed(0) + 'ms) ' +
+      '| mem ' + mem() + ' ' +
+      '| dataURL ' + (dataUrl ? fmtBytes(dataUrl.length) : '--')
+    $stat.className = maxGap > 200 ? 'warn' : ''
+  }
+  requestAnimationFrame(tick)
+}
+requestAnimationFrame(tick)
+
+// 全局错误兜底
+window.onerror = function(msg, src, line, col) {
+  log('window.onerror: ' + msg + ' @ ' + line + ':' + col, 'err')
+  return false
+}
+window.addEventListener('unhandledrejection', function(e) {
+  log('unhandledrejection: ' + (e.reason && e.reason.message || e.reason), 'err')
+})
+
+async function prepareImage() {
+  log('=== 准备图片 (2048x2048 PNG) ===', 'info')
+  const t0 = performance.now()
+  const ctx = $cv.getContext('2d')
+  const g = ctx.createLinearGradient(0,0,2048,2048)
+  g.addColorStop(0, '#ff3366')
+  g.addColorStop(0.5, '#33ccff')
+  g.addColorStop(1, '#ffcc33')
+  ctx.fillStyle = g
+  ctx.fillRect(0,0,2048,2048)
+  // 加噪声防止 PNG 压缩太狠，模拟真实生成图大小
+  for (let i=0;i<3000;i++) {
+    ctx.fillStyle = 'rgba('+(Math.random()*255|0)+','+(Math.random()*255|0)+','+(Math.random()*255|0)+',0.4)'
+    ctx.fillRect(Math.random()*2048, Math.random()*2048, 12, 12)
+  }
+  log('canvas 绘制 ' + (performance.now()-t0).toFixed(0) + 'ms')
+
+  log('toDataURL start')
+  const t1 = performance.now()
+  try {
+    dataUrl = $cv.toDataURL('image/png')
+    log('toDataURL done ' + (performance.now()-t1).toFixed(0) + 'ms, size=' + fmtBytes(dataUrl.length), 'ok')
+  } catch (e) {
+    log('toDataURL ERROR: ' + e, 'err')
+  }
+}
+
+function makeAnchor(href, fname) {
+  const a = document.createElement('a')
+  a.href = href
+  a.download = fname
+  document.body.appendChild(a)
+  return a
+}
+
+// ① 复现当前 HEAD 行为：fetch + createObjectURL + 立即 revoke
+async function test1() {
+  if (!dataUrl) { log('请先点 "准备图片"', 'err'); return }
+  log('=== ① fetch + 立即 revoke (复现 HEAD) ===', 'info')
+  maxGap = 0
+  try {
+    log('fetch(dataUrl) start')
+    let t = performance.now()
+    const res = await fetch(dataUrl)
+    log('fetch done ' + (performance.now()-t).toFixed(0) + 'ms')
+
+    log('res.blob() start')
+    t = performance.now()
+    const blob = await res.blob()
+    log('blob done ' + (performance.now()-t).toFixed(0) + 'ms, size=' + fmtBytes(blob.size) + ', type=' + blob.type, 'ok')
+
+    log('createObjectURL start')
+    t = performance.now()
+    const url = URL.createObjectURL(blob)
+    log('createObjectURL done ' + (performance.now()-t).toFixed(0) + 'ms, url=' + url, 'ok')
+
+    const a = makeAnchor(url, 'test1-' + Date.now() + '.png')
+
+    log('a.click() start  ← 如果卡死会停在这一行')
+    t = performance.now()
+    a.click()
+    log('a.click() returned ' + (performance.now()-t).toFixed(0) + 'ms', 'ok')
+
+    log('removeChild start')
+    document.body.removeChild(a)
+    log('removeChild done')
+
+    log('revokeObjectURL start (立即)')
+    URL.revokeObjectURL(url)
+    log('revokeObjectURL done', 'ok')
+    log('--- 完成,本步 RAF max gap = ' + maxGap.toFixed(0) + 'ms ---', 'info')
+  } catch (e) {
+    log('ERROR: ' + e, 'err')
+  }
+}
+
+// ② fetch + 延迟 revoke
+async function test2() {
+  if (!dataUrl) { log('请先点 "准备图片"', 'err'); return }
+  log('=== ② fetch + 延迟 revoke 1s ===', 'info')
+  maxGap = 0
+  try {
+    log('fetch+blob start')
+    let t = performance.now()
+    const blob = await (await fetch(dataUrl)).blob()
+    log('fetch+blob done ' + (performance.now()-t).toFixed(0) + 'ms, size=' + fmtBytes(blob.size), 'ok')
+
+    log('createObjectURL start')
+    const url = URL.createObjectURL(blob)
+    log('url=' + url)
+
+    const a = makeAnchor(url, 'test2-' + Date.now() + '.png')
+
+    log('a.click() start')
+    t = performance.now()
+    a.click()
+    log('a.click() returned ' + (performance.now()-t).toFixed(0) + 'ms', 'ok')
+
+    log('schedule cleanup in 1000ms')
+    setTimeout(function() {
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      log('delayed cleanup done', 'ok')
+      log('--- 完成,本步 RAF max gap = ' + maxGap.toFixed(0) + 'ms ---', 'info')
+    }, 1000)
+  } catch (e) {
+    log('ERROR: ' + e, 'err')
+  }
+}
+
+// ③ 不 fetch,直接把 dataURL 塞给 <a download>
+async function test3() {
+  if (!dataUrl) { log('请先点 "准备图片"', 'err'); return }
+  log('=== ③ 直接 dataURL (不 fetch) ===', 'info')
+  maxGap = 0
+  try {
+    log('href = dataURL (' + fmtBytes(dataUrl.length) + ')')
+    const a = makeAnchor(dataUrl, 'test3-' + Date.now() + '.png')
+
+    log('a.click() start')
+    let t = performance.now()
+    a.click()
+    log('a.click() returned ' + (performance.now()-t).toFixed(0) + 'ms', 'ok')
+
+    setTimeout(function() {
+      document.body.removeChild(a)
+      log('removeChild done', 'ok')
+      log('--- 完成,本步 RAF max gap = ' + maxGap.toFixed(0) + 'ms ---', 'info')
+    }, 1000)
+  } catch (e) {
+    log('ERROR: ' + e, 'err')
+  }
+}
+
+// ④ 显示图片让用户长按保存(兜底方案)
+function test4() {
+  if (!dataUrl) { log('请先点 "准备图片"', 'err'); return }
+  log('=== ④ 显示图片,请长按选择"保存图像" ===', 'info')
+  $preview.style.display = 'block'
+  $preview.src = dataUrl
+  log('preview img.src 已设置', 'ok')
+}
+</script>
+</body>
+</html>
