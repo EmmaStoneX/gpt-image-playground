@@ -2,9 +2,9 @@
 
 基于 OpenAI 图像生成接口的图片生成与编辑工具。提供简洁精美的 Web UI，支持文本生图、参考图与遮罩编辑，数据纯本地化存储，带来流畅的历史记录与参数管理体验。
 
-> 若需调用非 HTTPS 的内网或本地 HTTP API，请使用 GitHub Pages 版本或自行部署，Vercel 部署的体验版绑定的 `.dev` 域名因安全策略通常要求接口必须为 HTTPS。
+> 若需调用非 HTTPS 的内网或本地 HTTP API，请自行部署，在线体验版因安全策略通常要求接口必须为 HTTPS。
 
-[**🌐 Vercel 在线体验**](https://gpt-image-playground.cooksleep.dev) &nbsp;|&nbsp; [**🌐 GitHub Pages 在线体验**](https://cooksleep.github.io/gpt_image_playground)
+[**🌐 在线体验**](https://gpt-image.zxvmax.com/)
 
 ---
 
@@ -80,7 +80,7 @@
 <details>
 <summary><strong>▲ 方式一：Vercel 一键部署 (推荐)</strong></summary>
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FCookSleep%2Fgpt_image_playground&project-name=gpt-image-playground&repository-name=gpt-image-playground)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FEmmaStoneX%2Fgpt-image-playground&project-name=gpt-image-playground&repository-name=gpt-image-playground)
 
 点击上方按钮导入仓库即可，Vercel 会自动执行构建并部署静态文件。
 
@@ -98,54 +98,7 @@
 </details>
 
 <details>
-<summary><strong>🐳 方式二：Docker 部署</strong></summary>
-
-官方镜像已发布至 GitHub Container Registry。Docker 部署支持在运行时注入默认配置。
-
-**环境变量说明：**
-
-- `DEFAULT_API_URL`：设置页面上默认显示的 API 地址。
-- `API_PROXY_URL`：配置内置代理实际转发到的目标 API 地址（仅开启代理时有效）。
-- `ENABLE_API_PROXY`：设为 `true` 开启容器内置 Nginx 同源代理，用于解决浏览器跨域（CORS）限制。开启后，浏览器将请求同源的 `/api-proxy/`，再由 Nginx 转发至 `API_PROXY_URL`。
-- `HOST` / `PORT`：指定容器内 Nginx 监听的地址和端口（默认 `0.0.0.0:80`）。
-
-> ⚠️ **安全警告**：开启 API 代理后，任何人都能将你的服务器作为代理来请求目标 API。建议仅在有访问控制（如 IP 白名单）或本地网络中开启。
-
-> 💡 **兼容迁移**：旧版本中的 `API_URL` 已拆分为 `DEFAULT_API_URL` 和 `API_PROXY_URL`。容器启动时会自动将遗留的 `API_URL` 作为两个新变量的兜底值，实现无缝兼容。建议更新配置文件，逐步迁移至新变量。
-
-**1. Docker CLI 示例**
-
-```bash
-docker run -d -p 8080:80 \
-  -e DEFAULT_API_URL=https://api.openai.com/v1 \
-  -e ENABLE_API_PROXY=true \
-  -e API_PROXY_URL=https://api.openai.com/v1 \
-  ghcr.io/cooksleep/gpt_image_playground:latest
-```
-
-*(注：使用 host 网络时加 `--network host`，修改容器监听端口使用 `-e PORT=28080`)*
-
-**2. Docker Compose 示例**
-
-```yaml
-services:
-  gpt-image-playground:
-    image: ghcr.io/cooksleep/gpt_image_playground:latest
-    environment:
-      - DEFAULT_API_URL=https://api.openai.com/v1
-    ports:
-      - "8080:80"
-    restart: unless-stopped
-```
-
-**更新说明：**
-
-使用 `latest` 标签时，重新拉取镜像并重启即可更新（如 `docker compose pull && docker compose up -d`）。若需固定版本可使用官方提供的版本号标签（如 `0.2.x`）。
-
-</details>
-
-<details>
-<summary><strong>💻 方式三：本地开发与静态构建</strong></summary>
+<summary><strong>💻 方式二：本地开发与静态构建</strong></summary>
 
 **1. 环境准备与启动**
 
@@ -183,7 +136,7 @@ npm run build
 点击页面右上角的 **设置 (⚙️)**，可以配置模型、密钥与其他参数。
 
 - **双接口模式**：支持 `Images API` (需填写 GPT Image 模型，如 `gpt-image-2`) 和 `Responses API` (需填写支持该工具的文本模型，如 `gpt-5.5`)。
-- **API 代理**：开启后，浏览器将请求同源的 `/api-proxy/` 路径，交由当前部署环境（Docker 或 本地开发）代理转发至真实 API，以绕开浏览器 CORS 限制。
+- **API 代理**：开启后，浏览器将请求同源的 `/api-proxy/` 路径，交由本地开发环境代理转发至真实 API，以绕开浏览器 CORS 限制。
 - **Codex CLI 模式**：如果你在使用源于 Codex CLI 的 API，可以在 `API URL` 右侧开启该模式。开启后会禁用不支持的 `quality` 参数，Images API 的多图生成也将改为并发单图请求。此外，提示词文本开头会加入简短的防改写指令，防止模型偏离原意。（注：Responses API 无论是否开启此模式，都会默认加入防改写指令）。
 - **智能诊断提示**：当应用检测到接口返回的提示词被强制改写，或缺少官方 API 常规返回的参数时，会主动提示你是否针对当前配置组合开启 Codex CLI 模式。
 
@@ -199,11 +152,7 @@ npm run build
 例如，集成到 New API 的聊天系统：
 
 ```text
-https://gpt-image-playground.cooksleep.dev?apiUrl={address}&apiKey={key}
-```
-
-```text
-https://cooksleep.github.io/gpt_image_playground?apiUrl={address}&apiKey={key}
+https://gpt-image.zxvmax.com/?apiUrl={address}&apiKey={key}
 ```
 
 ---
@@ -223,4 +172,4 @@ https://cooksleep.github.io/gpt_image_playground?apiUrl={address}&apiKey={key}
 
 ## ⭐ Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=CookSleep/gpt_image_playground&type=Date)](https://www.star-history.com/#CookSleep/gpt_image_playground&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=EmmaStoneX/gpt-image-playground&type=Date)](https://www.star-history.com/#EmmaStoneX/gpt-image-playground&Date)

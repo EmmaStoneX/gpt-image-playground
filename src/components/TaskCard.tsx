@@ -175,6 +175,11 @@ export default function TaskCard({
       : 'bg-blue-500'
     : 'bg-gray-200 dark:bg-gray-700'
 
+  const dim = coverSize.match(/(\d+)[×x](\d+)/)
+  const aspectRatio = task.status === 'done' && dim ? `${dim[1]} / ${dim[2]}` : '4 / 5'
+
+  const actionBtn = 'flex items-center justify-center w-8 h-8 rounded-lg bg-black/35 text-white backdrop-blur-sm hover:bg-black/55 transition'
+
   return (
     <div className="relative rounded-xl">
       {/* 侧滑底图 */}
@@ -195,17 +200,18 @@ export default function TaskCard({
       </div>
 
       <div
-        className={`relative bg-white dark:bg-gray-900 rounded-xl border overflow-hidden cursor-pointer duration-200 hover:shadow-lg dark:hover:bg-gray-800/80 ${
+        className={`relative rounded-xl border overflow-hidden cursor-pointer group bg-gray-100 dark:bg-white/[0.03] duration-200 ${
           !isSwiping ? 'transition-[box-shadow,border-color,background-color,transform]' : 'transition-[box-shadow,border-color,background-color]'
         } ${
           task.status === 'running'
             ? 'border-blue-400 generating'
             : isSelected
             ? 'border-blue-500 shadow-md ring-2 ring-blue-500/50'
-            : 'border-gray-200 dark:border-white/[0.08] hover:border-gray-300 dark:hover:border-white/[0.18]'
+            : 'border-gray-200 dark:border-white/[0.08] hover:border-gray-300 dark:hover:border-white/20 hover:shadow-lg'
         }`}
         style={{
           transform: swipeOffset ? `translateX(${swipeOffset}px)` : undefined,
+          aspectRatio,
         }}
         onClick={(e) => {
           if (Date.now() < suppressClickUntilRef.current) {
@@ -220,256 +226,140 @@ export default function TaskCard({
         onTouchEnd={handleTouchEnd}
         onTouchCancel={handleTouchCancel}
       >
-        {/* 选中时的角标 */}
-      {isSelected && (
-        <div className="absolute top-2 right-2 z-10 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center shadow-sm">
-          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
-      )}
-      <div className="flex h-40">
-        {/* 左侧图片区域 */}
-        <div className="w-40 min-w-[10rem] h-full bg-gray-100 dark:bg-black/20 relative flex items-center justify-center overflow-hidden flex-shrink-0">
-          {task.status === 'running' && (
-            <div className="flex flex-col items-center gap-2">
-              <svg
-                className="w-8 h-8 text-blue-400 animate-spin"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                />
+        {/* 图片 / 状态 */}
+        {task.status === 'done' && thumbSrc && (
+          <MobileSafeImage
+            src={thumbSrc}
+            className="saveable-image absolute inset-0 w-full h-full object-cover"
+            loading="lazy"
+            alt=""
+          />
+        )}
+        {task.status === 'done' && !thumbSrc && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <svg className="w-9 h-9 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+        )}
+        {task.status === 'running' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+            <svg className="w-8 h-8 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <span className="text-xs text-gray-400 dark:text-gray-500">生成中…</span>
+          </div>
+        )}
+        {task.status === 'error' && isFalReconnecting && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 px-3">
+            <svg className="w-7 h-7 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span className="text-xs text-yellow-500 text-center leading-tight">重连中</span>
+          </div>
+        )}
+        {task.status === 'error' && !isFalReconnecting && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3">
+            <svg className="w-7 h-7 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="text-xs text-red-400 text-center leading-tight">生成失败</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); retryTask(task) }}
+              className="mt-1 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-500 text-white text-xs font-medium hover:bg-blue-600 transition"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
-              <span className="text-xs text-gray-400 dark:text-gray-500">生成中...</span>
-            </div>
-          )}
-          {task.status === 'error' && isFalReconnecting && (
-            <div className="flex flex-col items-center gap-1 px-2">
-              <svg
-                className="w-7 h-7 text-yellow-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
+              重试
+            </button>
+          </div>
+        )}
+
+        {/* 顶部左：比例/分辨率 或 计时 + 数量 */}
+        <div className="absolute top-2 left-2 flex items-center gap-1 pointer-events-none">
+          {showRunningTimer || task.status !== 'done' || !coverRatio || !coverSize ? (
+            <span className="flex items-center gap-1 bg-black/50 text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm font-mono">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span className="text-xs text-yellow-500 text-center leading-tight">
-                重连中
-              </span>
-            </div>
-          )}
-          {task.status === 'error' && !isFalReconnecting && (
-            <div className="flex flex-col items-center gap-1 px-2">
-              <svg
-                className="w-7 h-7 text-red-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <span className="text-xs text-red-400 text-center leading-tight">
-                失败
-              </span>
-            </div>
-          )}
-          {task.status === 'done' && thumbSrc && (
+              {duration}
+            </span>
+          ) : (
             <>
-              <MobileSafeImage
-                src={thumbSrc}
-                className="saveable-image w-full h-full object-cover"
-                loading="lazy"
-                alt=""
-              />
-              {task.outputImages.length > 1 && (
-                <span className="absolute bottom-1 right-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded">
-                  {task.outputImages.length}
-                </span>
-              )}
+              <span className="bg-black/50 text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm font-mono">
+                {coverRatio}
+              </span>
+              <span className="bg-black/50 text-white/90 text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm font-medium">
+                {coverSize}
+              </span>
             </>
           )}
-          {task.status === 'done' && !thumbSrc && (
-            <svg
-              className="w-8 h-8 text-gray-300"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
+          {task.status === 'done' && task.outputImages.length > 1 && (
+            <span className="flex items-center gap-0.5 bg-black/50 text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm font-medium">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <rect x="3" y="3" width="14" height="14" rx="2" />
+                <path d="M7 21h12a2 2 0 002-2V9" />
+              </svg>
+              {task.outputImages.length}
+            </span>
           )}
-          {/* 运行中显示耗时，完成后显示封面图比例与分辨率标签 */}
-          <div className="absolute top-1.5 left-1.5 flex items-center gap-1">
-            {showRunningTimer || task.status !== 'done' || !coverRatio || !coverSize ? (
-              <span className="flex items-center gap-1 bg-black/50 text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm font-mono">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                {duration}
-              </span>
-            ) : (
-              <>
-                <span className="bg-black/50 text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm font-mono">
-                  {coverRatio}
-                </span>
-                <span className="bg-black/50 text-white/90 text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm font-medium">
-                  {coverSize}
-                </span>
-              </>
-            )}
-          </div>
+          {task.maskImageId && (
+            <span className="bg-blue-500/90 text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm font-medium tracking-wide">
+              MASK
+            </span>
+          )}
         </div>
 
-        {/* 右侧信息区域 */}
-        <div className="flex-1 p-3 flex flex-col min-w-0">
-          <div className="flex-1 min-h-0 mb-2">
-            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed line-clamp-3">
+        {/* 顶部右：选中标记 / 收藏 */}
+        {isSelected ? (
+          <div className="absolute top-2 right-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center shadow-sm pointer-events-none">
+            <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+        ) : (
+          <button
+            onClick={(e) => { e.stopPropagation(); updateTaskInStore(task.id, { isFavorite: !task.isFavorite }) }}
+            className={`absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full backdrop-blur-sm transition ${
+              task.isFavorite
+                ? 'bg-black/35 text-yellow-400 opacity-100'
+                : 'bg-black/35 text-white opacity-0 group-hover:opacity-100 hover:text-yellow-300'
+            }`}
+            title={task.isFavorite ? '取消收藏' : '收藏记录'}
+          >
+            <svg className="w-4 h-4" fill={task.isFavorite ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+            </svg>
+          </button>
+        )}
+
+        {/* 底部：提示词 + 操作（悬停浮现，仅完成态） */}
+        {task.status === 'done' && (
+          <div className="absolute inset-x-0 bottom-0 px-2.5 pb-2.5 pt-10 bg-gradient-to-t from-black/80 via-black/35 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <p className="text-white text-xs leading-snug line-clamp-2 mb-2 drop-shadow">
               {task.prompt || '(无提示词)'}
             </p>
-          </div>
-          <div className="mt-auto flex flex-col gap-1.5">
-            {/* 参数：横向滚动 */}
-            <div className="flex overflow-x-auto hide-scrollbar gap-1.5 whitespace-nowrap mask-edge-r min-w-0 pr-2">
-              <ParamValue task={task} paramKey="quality" className="text-xs px-1.5 py-0.5 rounded flex-shrink-0" />
-              <ParamValue task={task} paramKey="size" className="text-xs px-1.5 py-0.5 rounded flex-shrink-0" />
-              <ParamValue task={task} paramKey="output_format" className="text-xs px-1.5 py-0.5 rounded flex-shrink-0" />
-              <ParamValue task={task} paramKey="n" className="text-xs px-1.5 py-0.5 rounded flex-shrink-0" actualParams={aggregateActualParams} />
-              {task.maskImageId && (
-                <span className="text-xs px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 flex-shrink-0">
-                  mask
-                </span>
-              )}
-              </div>
-            {/* 操作按钮 */}
-            <div
-              className="flex gap-1 justify-end flex-shrink-0"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {task.status === 'error' && !isFalReconnecting && (
-                <button
-                  onClick={() => retryTask(task)}
-                  className="p-1.5 rounded-md hover:bg-blue-50 dark:hover:bg-blue-950/30 text-gray-400 hover:text-blue-500 transition"
-                  title="重试失败任务"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                </button>
-              )}
-              <button
-                onClick={() =>
-                  updateTaskInStore(task.id, { isFavorite: !task.isFavorite })
-                }
-                className={`p-1.5 rounded-md transition ${
-                  task.isFavorite
-                    ? 'text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-500/10'
-                    : 'text-gray-400 hover:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-500/10'
-                }`}
-                title={task.isFavorite ? '取消收藏' : '收藏记录'}
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill={task.isFavorite ? 'currentColor' : 'none'}
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
-                  />
+            <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+              <button onClick={onReuse} className={actionBtn} title="复用配置">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                 </svg>
               </button>
-              <button
-                onClick={onReuse}
-                className="p-1.5 rounded-md hover:bg-blue-50 dark:hover:bg-blue-950/30 text-gray-400 hover:text-blue-500 transition"
-                title="复用配置"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
-                  />
+              <button onClick={onEditOutputs} disabled={!task.outputImages?.length} className={`${actionBtn} disabled:opacity-30`} title="编辑输出">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
               </button>
-              <button
-                onClick={onEditOutputs}
-                className="p-1.5 rounded-md hover:bg-green-50 dark:hover:bg-green-950/30 text-gray-400 hover:text-green-500 transition disabled:opacity-30"
-                title="编辑输出"
-                disabled={!task.outputImages?.length}
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                  />
-                </svg>
-              </button>
-              <button
-                onClick={onDelete}
-                className="p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-950/30 text-gray-400 hover:text-red-500 transition"
-                title="删除记录"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                  />
+              <button onClick={onDelete} className={`${actionBtn} ml-auto hover:!bg-red-500/80`} title="删除记录">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
               </button>
             </div>
           </div>
-        </div>
-      </div>
+        )}
       </div>
     </div>
   )

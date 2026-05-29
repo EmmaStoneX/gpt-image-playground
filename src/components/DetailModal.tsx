@@ -268,6 +268,17 @@ export default function DetailModal() {
     setDetailTaskId(null)
   }
 
+  const handleDownload = () => {
+    if (!currentOutputImageSrc) return
+    const ext = task.params.output_format || 'png'
+    const a = document.createElement('a')
+    a.href = currentOutputImageSrc
+    a.download = `gpt-image-${task.id}-${imageIndex + 1}.${ext}`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  }
+
   return (
     <div
       data-no-drag-select
@@ -590,6 +601,19 @@ export default function DetailModal() {
               {formatDuration() && <span> · 耗时 {formatDuration()}</span>}
             </div>
           </div>
+
+          {/* 下载图像 */}
+          {task.status === 'done' && outputLen > 0 && currentOutputImageSrc && (
+            <button
+              onClick={handleDownload}
+              className="mb-2 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-600"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><path d="M7 10l5 5 5-5" /><path d="M12 15V3" />
+              </svg>
+              下载图像
+            </button>
+          )}
 
           {/* 操作按钮 */}
           <div className="grid grid-cols-4 sm:flex gap-2 pt-4 border-t border-gray-100 dark:border-white/[0.08]">

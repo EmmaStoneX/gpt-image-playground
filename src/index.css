@@ -1,18 +1,31 @@
 @import url('https://fontsapi.zeoseven.com/442/main/result.css');
 @import url('https://cdn.jsdelivr.net/npm/@lobehub/webfont-harmony-sans-sc@1.0.0/css/index.css');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --font-ui-sans: 'HarmonyOS Sans SC', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --font-mono: 'Maple Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace;
+  --font-ui-sans: 'Noto Sans SC', 'HarmonyOS Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Maple Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace;
+  /* 设计令牌：accent（随主题切换） */
+  --accent: 13 153 255;
+  --accent-strong: 10 111 224;
+  --page-bg: #F6F6F9;
+  --page-text: #18181B;
   --safe-area-top: env(safe-area-inset-top, 0px);
   --safe-area-right: env(safe-area-inset-right, 0px);
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --safe-area-left: env(safe-area-inset-left, 0px);
   scrollbar-gutter: stable;
+}
+
+.dark {
+  --accent: 79 168 255;
+  --accent-strong: 46 143 255;
+  --page-bg: #0A0A0F;
+  --page-text: #F5F5F8;
 }
 
 html {
@@ -23,6 +36,7 @@ body {
   padding: 0;
   -webkit-user-select: none;
   user-select: none;
+  font-family: var(--font-ui-sans);
 }
 
 input,
@@ -59,10 +73,8 @@ body.drag-selecting * {
   user-select: none !important;
 }
 
-@media (prefers-color-scheme: dark) {
-  * {
-    scrollbar-color: #3f3f46 transparent;
-  }
+.dark * {
+  scrollbar-color: #3f3f46 transparent;
 }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -80,14 +92,15 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
-@media (prefers-color-scheme: dark) {
-  ::-webkit-scrollbar-thumb { background: #3f3f46; }
-  ::-webkit-scrollbar-thumb:hover { background: #52525b; }
-}
+.dark ::-webkit-scrollbar-thumb { background: #3f3f46; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #52525b; }
 
 @keyframes pulse-border {
-  0%, 100% { border-color: #3b82f6; }
-  50% { border-color: #93c5fd; }
+  0%, 100% { border-color: #0D99FF; }
+  50% { border-color: #7CC6FF; }
+}
+.generating {
+  animation: pulse-border 1.6s ease-in-out infinite;
 }
 .hide-scrollbar {
   -ms-overflow-style: none;

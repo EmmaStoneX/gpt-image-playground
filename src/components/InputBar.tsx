@@ -126,6 +126,7 @@ export default function InputBar() {
   const [qualityHintVisible, setQualityHintVisible] = useState(false)
   const [imageHintId, setImageHintId] = useState<string | null>(null)
   const [mobileCollapsed, setMobileCollapsed] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
   const [showSizePicker, setShowSizePicker] = useState(false)
   const [maskPreviewUrl, setMaskPreviewUrl] = useState('')
   const [imageDragIndex, setImageDragIndex] = useState<number | null>(null)
@@ -179,6 +180,13 @@ export default function InputBar() {
         { label: 'medium', value: 'medium' },
         { label: 'high', value: 'high' },
       ]
+  const qualityLabelMap: Record<string, string> = { auto: '自动', low: '低质量', medium: '中质量', high: '高质量' }
+  const effectiveQuality = settings.codexCli
+    ? 'auto'
+    : isFalProvider && params.quality === 'auto'
+      ? 'high'
+      : params.quality
+  const qualityLabel = qualityLabelMap[effectiveQuality] ?? effectiveQuality
   const atImageLimit = inputImages.length >= API_MAX_IMAGES
   const maskTargetImage = maskDraft
     ? inputImages.find((img) => img.id === maskDraft.targetImageId) ?? null
@@ -1126,7 +1134,7 @@ export default function InputBar() {
         />
       )}
 
-      <div data-input-bar className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 w-full max-w-4xl px-3 sm:px-4 transition-all duration-300">
+      <div data-input-bar className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 w-full max-w-[760px] px-3 sm:px-4 transition-all duration-300">
         {selectedTaskIds.length > 0 && (
           <div className="flex justify-center mb-3">
             <div className="bg-gray-800/90 dark:bg-gray-800/90 backdrop-blur shadow-lg rounded-full flex items-center p-1 border border-white/10 pointer-events-auto">
@@ -1185,7 +1193,7 @@ export default function InputBar() {
             </div>
           </div>
         )}
-        <div ref={cardRef} className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-2xl border border-white/50 dark:border-white/[0.08] shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] rounded-2xl sm:rounded-3xl p-3 sm:p-4 ring-1 ring-black/5 dark:ring-white/10">
+        <div ref={cardRef} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/[0.08] shadow-[0_10px_28px_rgba(15,23,42,0.14)] dark:shadow-[0_10px_28px_rgba(0,0,0,0.5)] rounded-[14px] p-2">
           {/* 移动端拖动条 */}
           <div
             ref={handleRef}
@@ -1215,120 +1223,104 @@ export default function InputBar() {
             )
           )}
 
-          {/* 输入框 */}
-          <textarea
-            ref={textareaRef}
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={handleKeyDown}
-            rows={1}
-            placeholder="描述你想生成的图片..."
-            className="w-full px-4 py-3 rounded-2xl border border-gray-200/60 dark:border-white/[0.08] bg-white/50 dark:bg-white/[0.03] text-sm focus:outline-none leading-relaxed resize-none shadow-sm transition-[border-color,box-shadow] duration-200"
-          />
+          {/* 高级参数抽屉 */}
+          <div className={`collapse-section${showAdvanced ? '' : ' collapsed'}`}>
+            <div className="collapse-inner px-1 pt-1">
+              {renderParams('grid-cols-2 sm:grid-cols-6')}
+              <div className="h-2" />
+            </div>
+          </div>
 
-          {/* 参数 + 按钮 */}
-          <div className="mt-3">
-            {/* 桌面端布局 */}
-            <div className="hidden sm:flex items-end justify-between gap-3">
-              {renderParams('grid-cols-6')}
-
-              <div className="flex gap-2 flex-shrink-0 mb-0.5">
-                <div
-                  className="relative"
-                  onMouseEnter={() => setAttachHover(true)}
-                  onMouseLeave={() => setAttachHover(false)}
-                >
-                  <ButtonTooltip visible={atImageLimit && attachHover} text={`参考图数量已达上限（${API_MAX_IMAGES} 张），无法继续添加`} />
-                  <button
-                    onClick={() => !atImageLimit && fileInputRef.current?.click()}
-                    className={`p-2.5 rounded-xl transition-all shadow-sm ${
-                      atImageLimit
-                        ? 'bg-gray-200 dark:bg-white/[0.04] text-gray-300 dark:text-gray-500 cursor-not-allowed'
-                        : 'bg-gray-200 dark:bg-white/[0.06] hover:bg-gray-300 dark:hover:bg-white/[0.1] text-gray-500 dark:text-gray-300 hover:shadow'
-                    }`}
-                    title={atImageLimit ? `已达上限 ${API_MAX_IMAGES} 张` : '添加参考图'}
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                    </svg>
-                  </button>
-                </div>
-                <div
-                  className="relative"
-                  onMouseEnter={() => setSubmitHover(true)}
-                  onMouseLeave={() => setSubmitHover(false)}
-                >
-                  <ButtonTooltip visible={!settings.apiKey && submitHover} text="尚未完成 API 配置，请在右上角设置中进行" />
-                  <button
-                    onClick={() => settings.apiKey ? submitTask() : setShowSettings(true)}
-                    disabled={settings.apiKey ? !canSubmit : false}
-                    className={`p-2.5 rounded-xl transition-all shadow-sm hover:shadow ${
-                      !settings.apiKey
-                        ? 'bg-gray-300 dark:bg-white/[0.06] text-white cursor-pointer'
-                        : 'bg-blue-500 text-white hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-white/[0.04] disabled:opacity-50 disabled:cursor-not-allowed'
-                    }`}
-                    title={settings.apiKey ? (maskDraft ? '遮罩编辑 (Ctrl+Enter)' : '生成 (Ctrl+Enter)') : '请先配置 API'}
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
+          {/* 命令栏：附件 · 提示词 · 参数胶囊 · 生成 */}
+          <div className="flex items-center gap-2">
+            {/* 附件 */}
+            <div
+              className="relative flex-shrink-0 self-end"
+              onMouseEnter={() => setAttachHover(true)}
+              onMouseLeave={() => setAttachHover(false)}
+            >
+              <ButtonTooltip visible={atImageLimit && attachHover} text={`参考图数量已达上限（${API_MAX_IMAGES} 张），无法继续添加`} />
+              <button
+                onClick={() => !atImageLimit && fileInputRef.current?.click()}
+                className={`flex items-center justify-center w-10 h-10 rounded-[10px] transition-all ${
+                  atImageLimit
+                    ? 'bg-gray-100 dark:bg-white/[0.04] text-gray-300 dark:text-gray-500 cursor-not-allowed'
+                    : 'bg-gray-100 dark:bg-white/[0.06] hover:bg-gray-200 dark:hover:bg-white/[0.1] text-gray-500 dark:text-gray-300'
+                }`}
+                title={atImageLimit ? `已达上限 ${API_MAX_IMAGES} 张` : '添加参考图'}
+              >
+                <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                </svg>
+              </button>
             </div>
 
-            {/* 移动端布局 */}
-            <div className="sm:hidden flex flex-col gap-2">
-              <div className={`collapse-section${mobileCollapsed ? ' collapsed' : ''}`}>
-                <div className="collapse-inner">
-                  {renderParams('grid-cols-2')}
-                  <div className="h-2" />
-                </div>
-              </div>
+            {/* 提示词 */}
+            <textarea
+              ref={textareaRef}
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={1}
+              placeholder="描述你想生成的图像，或粘贴 / 拖入参考图…"
+              className="flex-1 min-w-0 bg-transparent border-0 px-1.5 py-2.5 text-sm leading-relaxed resize-none focus:outline-none placeholder:text-gray-400 dark:placeholder:text-gray-500"
+            />
 
-              <div className="flex items-center gap-2">
-                <div
-                  className="relative"
-                  onMouseEnter={() => setAttachHover(true)}
-                  onMouseLeave={() => setAttachHover(false)}
-                >
-                  <ButtonTooltip visible={atImageLimit && attachHover} text={`参考图数量已达上限（${API_MAX_IMAGES} 张），无法继续添加`} />
-                  <button
-                    onClick={() => !atImageLimit && fileInputRef.current?.click()}
-                    className={`p-2.5 rounded-xl transition-all shadow-sm flex-shrink-0 ${
-                      atImageLimit
-                        ? 'bg-gray-200 dark:bg-white/[0.04] text-gray-300 dark:text-gray-500 cursor-not-allowed'
-                        : 'bg-gray-200 dark:bg-white/[0.06] hover:bg-gray-300 dark:hover:bg-white/[0.1] text-gray-500 dark:text-gray-300'
-                    }`}
-                    title={atImageLimit ? `已达上限 ${API_MAX_IMAGES} 张` : '添加参考图'}
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                    </svg>
-                  </button>
-                </div>
-                <div
-                  className="relative flex-1"
-                  onMouseEnter={() => setSubmitHover(true)}
-                  onMouseLeave={() => setSubmitHover(false)}
-                >
-                  <ButtonTooltip visible={!settings.apiKey && submitHover} text="尚未完成 API 配置，请在右上角设置中进行" />
-                  <button
-                    onClick={() => settings.apiKey ? submitTask() : setShowSettings(true)}
-                    disabled={settings.apiKey ? !canSubmit : false}
-                    className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all shadow-sm ${
-                      !settings.apiKey
-                        ? 'bg-gray-300 dark:bg-white/[0.06] text-white cursor-pointer'
-                        : 'bg-blue-500 text-white hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-white/[0.04] disabled:opacity-50 disabled:cursor-not-allowed'
-                    }`}
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                    </svg>
-                    {maskDraft ? '遮罩编辑' : '生成图像'}
-                  </button>
-                </div>
-              </div>
+            {/* 参数胶囊（桌面端：完整文字；移动端：图标） */}
+            <button
+              onClick={() => setShowAdvanced((v) => !v)}
+              className={`flex-shrink-0 self-end hidden sm:flex items-center gap-[7px] h-10 px-3 rounded-[10px] text-[13px] transition-all ${
+                showAdvanced
+                  ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-300'
+                  : 'bg-gray-100 dark:bg-white/[0.06] text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-white/[0.1]'
+              }`}
+              title="高级参数"
+            >
+              <svg className={`w-[15px] h-[15px] shrink-0 ${showAdvanced ? 'text-blue-500 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400'}`} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                <line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" />
+                <circle cx="9" cy="6" r="2" fill="currentColor" stroke="none" /><circle cx="15" cy="12" r="2" fill="currentColor" stroke="none" /><circle cx="9" cy="18" r="2" fill="currentColor" stroke="none" />
+              </svg>
+              <span className="font-mono font-medium leading-none">{displaySize}</span>
+              <span className="w-[3px] h-[3px] shrink-0 rounded-full bg-gray-400 dark:bg-gray-500" />
+              <span className="font-medium leading-none">{qualityLabel}</span>
+            </button>
+            <button
+              onClick={() => setShowAdvanced((v) => !v)}
+              className={`flex-shrink-0 self-end sm:hidden flex items-center justify-center w-10 h-10 rounded-[10px] transition-all ${
+                showAdvanced
+                  ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-300'
+                  : 'bg-gray-100 dark:bg-white/[0.06] text-gray-500 dark:text-gray-300'
+              }`}
+              title="高级参数"
+            >
+              <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                <line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" />
+                <circle cx="9" cy="6" r="2" fill="currentColor" stroke="none" /><circle cx="15" cy="12" r="2" fill="currentColor" stroke="none" /><circle cx="9" cy="18" r="2" fill="currentColor" stroke="none" />
+              </svg>
+            </button>
+
+            {/* 生成 */}
+            <div
+              className="relative flex-shrink-0 self-end"
+              onMouseEnter={() => setSubmitHover(true)}
+              onMouseLeave={() => setSubmitHover(false)}
+            >
+              <ButtonTooltip visible={!settings.apiKey && submitHover} text="尚未完成 API 配置，请在右上角设置中进行" />
+              <button
+                onClick={() => settings.apiKey ? submitTask() : setShowSettings(true)}
+                disabled={settings.apiKey ? !canSubmit : false}
+                className={`flex items-center justify-center gap-[7px] h-10 px-4 rounded-[10px] text-sm font-semibold transition-all ${
+                  !settings.apiKey
+                    ? 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer'
+                    : 'bg-blue-500 text-white hover:bg-blue-600 disabled:bg-gray-200 dark:disabled:bg-white/[0.06] disabled:text-gray-400 dark:disabled:text-gray-500 disabled:cursor-not-allowed'
+                }`}
+                title={settings.apiKey ? (maskDraft ? '遮罩编辑 (Ctrl+Enter)' : '生成 (Ctrl+Enter)') : '请先配置 API'}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                  <path d="M12 19V5M5 12l7-7 7 7" />
+                </svg>
+                <span>{maskDraft ? '遮罩编辑' : '生成'}</span>
+              </button>
             </div>
           </div>
 

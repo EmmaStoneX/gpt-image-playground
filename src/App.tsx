@@ -6,7 +6,6 @@ import { normalizeSettings, switchApiProfileProvider } from './lib/apiProfiles'
 import { useDockerApiUrlMigrationNotice } from './hooks/useDockerApiUrlMigrationNotice'
 import type { ApiMode, ApiProvider, AppSettings } from './types'
 import Header from './components/Header'
-import SearchBar from './components/SearchBar'
 import TaskGrid from './components/TaskGrid'
 import InputBar from './components/InputBar'
 import DetailModal from './components/DetailModal'
@@ -105,8 +104,7 @@ export default function App() {
     <>
       <Header />
       <main data-home-main data-drag-select-surface className="pb-48">
-        <div className="safe-area-x max-w-7xl mx-auto">
-          <SearchBar />
+        <div className="safe-area-x max-w-7xl mx-auto pt-6">
           <TaskGrid />
         </div>
       </main>
