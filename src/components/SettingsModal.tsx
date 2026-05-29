@@ -265,9 +265,32 @@ export default function SettingsModal() {
     commitSettings(nextDraft)
   }
 
-  const fieldCls = 'w-full rounded-xl border border-gray-200/70 bg-white/60 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-blue-300 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200 dark:focus:border-blue-500/50'
-  const labelCls = 'mb-1 block text-xs text-gray-500 dark:text-gray-400'
+  const fieldCls = 'w-full rounded-lg border border-gray-200/70 bg-white/60 px-3 py-1.5 text-[13px] text-gray-700 outline-none transition focus:border-blue-300 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200 dark:focus:border-blue-500/50'
+  const labelCls = 'mb-0.5 block text-xs font-semibold text-gray-500 dark:text-gray-400'
   const apiMode = activeProfile.apiMode ?? DEFAULT_SETTINGS.apiMode
+
+  const renderSwitchCard = (
+    title: string,
+    desc: string,
+    checked: boolean,
+    onToggle: () => void,
+  ) => (
+    <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-200/70 bg-white/60 px-2.5 py-2 dark:border-white/[0.08] dark:bg-white/[0.03]">
+      <div className="min-w-0">
+        <span className="block text-[13px] font-medium leading-tight text-gray-700 dark:text-gray-200">{title}</span>
+        <span className="block text-[10px] leading-tight text-gray-400 dark:text-gray-500">{desc}</span>
+      </div>
+      <button
+        type="button"
+        onClick={onToggle}
+        className={`relative inline-flex h-[18px] w-8 shrink-0 items-center rounded-full transition-colors ${checked ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+        role="switch"
+        aria-checked={checked}
+      >
+        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-[14px]' : 'translate-x-[2px]'}`} />
+      </button>
+    </div>
+  )
 
   const imageCount = tasks.reduce((acc, t) => acc + (t.outputImages?.length || 0), 0)
   const recordCount = tasks.length
@@ -319,9 +342,9 @@ export default function SettingsModal() {
   const tabTitle = TABS.find((t) => t.id === tab)?.label ?? ''
 
   return (
-    <div data-no-drag-select className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+    <div data-no-drag-select className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm animate-overlay-in" onClick={handleClose} />
-      <div className="relative z-10 flex w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/50 bg-white shadow-2xl ring-1 ring-black/5 animate-modal-in dark:border-white/[0.08] dark:bg-gray-900 dark:ring-white/10 sm:h-[600px] sm:max-h-[88vh] sm:flex-row max-h-[88vh]">
+      <div className="relative z-10 flex w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-white/50 bg-white shadow-2xl ring-1 ring-black/5 animate-modal-in dark:border-white/[0.08] dark:bg-gray-900 dark:ring-white/10 sm:rounded-2xl sm:h-[600px] sm:max-h-[88vh] sm:flex-row max-h-[92dvh]">
 
         {/* 桌面侧边栏 */}
         <div className="hidden shrink-0 flex-col gap-1 border-r border-gray-200 bg-gray-50/80 p-3 dark:border-white/[0.08] dark:bg-white/[0.02] sm:flex sm:w-52">
@@ -355,16 +378,16 @@ export default function SettingsModal() {
         <div className="flex min-w-0 flex-1 flex-col">
           {/* 移动端头部 + 标签 */}
           <div className="sm:hidden">
-            <div className="flex items-center justify-between px-4 pt-4 pb-2">
-              <h3 className="text-base font-semibold text-gray-800 dark:text-gray-100">设置</h3>
+            <div className="flex items-center justify-between px-4 pt-3 pb-1">
+              <h3 className="text-[15px] font-semibold text-gray-800 dark:text-gray-100">设置</h3>
               {closeBtn}
             </div>
-            <div className="flex gap-1.5 overflow-x-auto hide-scrollbar px-4 pb-3">
+            <div className="flex gap-1 overflow-x-auto hide-scrollbar px-4 pb-2">
               {TABS.map((t) => (
                 <button
                   key={t.id}
                   onClick={() => setTab(t.id)}
-                  className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                  className={`whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-medium transition ${
                     tab === t.id
                       ? 'bg-blue-500 text-white'
                       : 'bg-gray-100 text-gray-500 dark:bg-white/[0.06] dark:text-gray-400'
@@ -382,9 +405,9 @@ export default function SettingsModal() {
             {closeBtn}
           </div>
 
-          <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 custom-scrollbar">
+          <div className={`flex-1 custom-scrollbar px-4 py-3 sm:px-6 sm:py-4 ${tab === 'api' ? 'overflow-hidden sm:overflow-y-auto' : 'overflow-y-auto'}`}>
             {tab === 'api' && (
-              <div className="space-y-4">
+              <div className="space-y-2.5">
                 {/* 配置方案 */}
                 <div className="flex items-end gap-2">
                   <div className="relative min-w-0 flex-1">
@@ -392,7 +415,7 @@ export default function SettingsModal() {
                     <button
                       type="button"
                       onClick={() => setShowProfileMenu(!showProfileMenu)}
-                      className="flex w-full min-w-0 items-center justify-between gap-2 rounded-xl border border-gray-200/70 bg-white/60 px-3 py-2 text-sm text-gray-700 outline-none transition hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200 dark:hover:bg-white/[0.06]"
+                      className="flex h-[34px] w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-gray-200/70 bg-white/60 px-3 text-[13px] text-gray-700 outline-none transition hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200 dark:hover:bg-white/[0.06]"
                       title={activeProfile.name}
                     >
                       <span className="flex min-w-0 items-center gap-2">
@@ -454,7 +477,7 @@ export default function SettingsModal() {
                   <button
                     type="button"
                     onClick={createNewProfile}
-                    className="flex h-[38px] items-center gap-1 rounded-xl border border-gray-200/70 bg-white/60 px-3 text-sm font-medium text-blue-600 transition hover:bg-blue-50 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-blue-400 dark:hover:bg-blue-500/10"
+                    className="flex h-[34px] shrink-0 items-center gap-1 rounded-lg border border-gray-200/70 bg-white/60 px-3 text-[13px] font-medium text-blue-600 transition hover:bg-blue-50 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-blue-400 dark:hover:bg-blue-500/10"
                   >
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -463,42 +486,43 @@ export default function SettingsModal() {
                   </button>
                 </div>
 
-                <label className="block">
-                  <span className={labelCls}>配置名称</span>
-                  <input
-                    value={activeProfile.name}
-                    onChange={(e) => updateActiveProfile({ name: e.target.value })}
-                    onBlur={(e) => commitActiveProfilePatch({ name: e.target.value })}
-                    type="text"
-                    className={fieldCls}
-                  />
-                </label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <label className="block min-w-0">
+                    <span className={labelCls}>配置名称</span>
+                    <input
+                      value={activeProfile.name}
+                      onChange={(e) => updateActiveProfile({ name: e.target.value })}
+                      onBlur={(e) => commitActiveProfilePatch({ name: e.target.value })}
+                      type="text"
+                      className={fieldCls}
+                    />
+                  </label>
 
-                {/* 提供商分段 */}
-                <div className="block">
-                  <span className={labelCls}>提供商</span>
-                  <div className="flex gap-1 rounded-xl border border-gray-200/70 bg-gray-100/70 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]">
-                    {([['openai', 'OpenAI'], ['fal', 'fal.ai']] as const).map(([val, label]) => (
-                      <button
-                        key={val}
-                        type="button"
-                        onClick={() => updateActiveProfile(switchApiProfileProvider(activeProfile, val), true)}
-                        className={`flex-1 rounded-lg py-1.5 text-sm font-medium transition ${
-                          activeProfile.provider === val
-                            ? 'bg-white text-blue-600 shadow-sm dark:bg-white/10 dark:text-blue-400'
-                            : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
+                  <div className="block min-w-0">
+                    <span className={labelCls}>提供商</span>
+                    <div className="flex h-[34px] gap-1 rounded-lg border border-gray-200/70 bg-gray-100/70 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]">
+                      {([['openai', 'OpenAI'], ['fal', 'fal.ai']] as const).map(([val, label]) => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => updateActiveProfile(switchApiProfileProvider(activeProfile, val), true)}
+                          className={`flex-1 rounded-md text-[13px] font-medium transition ${
+                            activeProfile.provider === val
+                              ? 'bg-white text-blue-600 shadow-sm dark:bg-white/10 dark:text-blue-400'
+                              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
                 {activeProfile.provider === 'openai' && (
                   <label className="block">
-                    <div className="mb-1 flex items-center justify-between">
-                      <span className="block text-xs text-gray-500 dark:text-gray-400">API 地址</span>
+                    <div className="mb-0.5 flex items-center justify-between">
+                      <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">API 地址</span>
                       <div
                         onClick={(e) => {
                           e.preventDefault()
@@ -523,18 +547,20 @@ export default function SettingsModal() {
                       placeholder={DEFAULT_SETTINGS.baseUrl}
                       className={`${fieldCls} ${apiProxyEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                     />
-                    <div data-selectable-text className="mt-1 min-h-[22px] flex items-center text-[10px] text-gray-400 dark:text-gray-500">
-                      {apiProxyEnabled ? (
-                        <span className="text-yellow-600 dark:text-yellow-500">已开启代理，实际请求目标由部署端决定，此处设置被忽略。</span>
-                      ) : (
-                        <span>支持通过查询参数覆盖：<code className="rounded bg-gray-100 px-1 py-0.5 dark:bg-white/[0.06]">?apiUrl=</code>，<code className="rounded bg-gray-100 px-1 py-0.5 dark:bg-white/[0.06]">codexCli=true</code></span>
-                      )}
-                    </div>
+                    {apiProxyEnabled ? (
+                      <div data-selectable-text className="mt-0.5 text-[10px] leading-tight text-yellow-600 dark:text-yellow-500">
+                        已开启代理，实际请求目标由部署端决定，此处设置被忽略。
+                      </div>
+                    ) : (
+                      <div data-selectable-text className="mt-0.5 hidden text-[10px] leading-tight text-gray-400 dark:text-gray-500 sm:block">
+                        支持通过查询参数覆盖：<code className="rounded bg-gray-100 px-1 py-0.5 dark:bg-white/[0.06]">?apiUrl=</code>，<code className="rounded bg-gray-100 px-1 py-0.5 dark:bg-white/[0.06]">codexCli=true</code>
+                      </div>
+                    )}
                   </label>
                 )}
 
                 <div className="block">
-                  <span className="mb-1 block text-xs text-gray-500 dark:text-gray-400">API 密钥</span>
+                  <span className={labelCls}>API 密钥</span>
                   <div className="relative">
                     <input
                       value={activeProfile.apiKey}
@@ -565,14 +591,14 @@ export default function SettingsModal() {
                       )}
                     </button>
                   </div>
-                  <div data-selectable-text className="mt-1 text-[10px] text-gray-400 dark:text-gray-500">
+                  <div data-selectable-text className="mt-0.5 hidden text-[10px] leading-tight text-gray-400 dark:text-gray-500 sm:block">
                     支持通过查询参数覆盖：<code className="rounded bg-gray-100 px-1 py-0.5 dark:bg-white/[0.06]">?apiKey=</code>
                   </div>
                 </div>
 
                 {activeProfile.provider === 'openai' && (
                   <label className="block">
-                    <span className="mb-1 block text-xs text-gray-500 dark:text-gray-400">API 接口</span>
+                    <span className={labelCls}>API 接口</span>
                     <Select
                       value={apiMode}
                       onChange={(value) => {
@@ -592,9 +618,9 @@ export default function SettingsModal() {
                   </label>
                 )}
 
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="block">
-                    <span className="mb-1 block text-xs text-gray-500 dark:text-gray-400">模型 ID</span>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <label className={`block min-w-0 ${activeProfile.provider !== 'openai' ? 'col-span-2' : ''}`}>
+                    <span className={labelCls}>模型 ID</span>
                     <input
                       value={activeProfile.model}
                       onChange={(e) => updateActiveProfile({ model: e.target.value })}
@@ -604,9 +630,9 @@ export default function SettingsModal() {
                       className={fieldCls}
                     />
                   </label>
-                  {activeProfile.provider === 'openai' && (
-                    <label className="block">
-                      <span className="mb-1 block text-xs text-gray-500 dark:text-gray-400">超时 (秒)</span>
+                  {activeProfile.provider === 'openai' ? (
+                    <label className="block min-w-0">
+                      <span className={labelCls}>超时 (秒)</span>
                       <input
                         value={timeoutInput}
                         onChange={(e) => setTimeoutInput(e.target.value)}
@@ -617,41 +643,24 @@ export default function SettingsModal() {
                         className={fieldCls}
                       />
                     </label>
+                  ) : (
+                    <div className="hidden sm:block" aria-hidden />
                   )}
                 </div>
 
-                {apiProxyAvailable && activeProfile.provider === 'openai' && (
-                  <div className="flex items-center justify-between rounded-xl border border-gray-200/70 bg-white/60 px-3 py-2.5 dark:border-white/[0.08] dark:bg-white/[0.03]">
-                    <div className="min-w-0 pr-3">
-                      <span className="block text-sm text-gray-700 dark:text-gray-200">通过代理请求</span>
-                      <span className="block text-[10px] text-gray-400 dark:text-gray-500">由当前部署提供同源代理，开启后 API 地址被忽略。</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => updateActiveProfile({ apiProxy: !activeProfile.apiProxy }, true)}
-                      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${activeProfile.apiProxy ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-                      role="switch"
-                      aria-checked={activeProfile.apiProxy}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${activeProfile.apiProxy ? 'translate-x-[18px]' : 'translate-x-[2px]'}`} />
-                    </button>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between rounded-xl border border-gray-200/70 bg-white/60 px-3 py-2.5 dark:border-white/[0.08] dark:bg-white/[0.03]">
-                  <div className="min-w-0 pr-3">
-                    <span className="block text-sm text-gray-700 dark:text-gray-200">提交后清空输入</span>
-                    <span className="block text-[10px] text-gray-400 dark:text-gray-500">成功创建任务后清空提示词与参考图。</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => commitSettings({ ...draft, clearInputAfterSubmit: !draft.clearInputAfterSubmit })}
-                    className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${draft.clearInputAfterSubmit ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-                    role="switch"
-                    aria-checked={draft.clearInputAfterSubmit}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${draft.clearInputAfterSubmit ? 'translate-x-[18px]' : 'translate-x-[2px]'}`} />
-                  </button>
+                <div className={`grid gap-2.5 ${apiProxyAvailable && activeProfile.provider === 'openai' ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'}`}>
+                  {apiProxyAvailable && activeProfile.provider === 'openai' && renderSwitchCard(
+                    '通过代理请求',
+                    '开启后 API 地址被忽略',
+                    activeProfile.apiProxy,
+                    () => updateActiveProfile({ apiProxy: !activeProfile.apiProxy }, true),
+                  )}
+                  {renderSwitchCard(
+                    '提交后清空输入',
+                    '成功后清空提示词与参考图',
+                    draft.clearInputAfterSubmit,
+                    () => commitSettings({ ...draft, clearInputAfterSubmit: !draft.clearInputAfterSubmit }),
+                  )}
                 </div>
               </div>
             )}
@@ -794,7 +803,7 @@ export default function SettingsModal() {
           </div>
 
           {(tab === 'api' || tab === 'defaults') && (
-            <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-4 py-3 dark:border-white/[0.08] sm:px-6">
+            <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-4 py-2 dark:border-white/[0.08] sm:px-6 sm:py-3">
               <button
                 onClick={handleClose}
                 className="rounded-xl px-4 py-2 text-sm font-medium text-gray-500 transition hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/[0.06]"

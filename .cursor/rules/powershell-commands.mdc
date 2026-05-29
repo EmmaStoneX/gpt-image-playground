@@ -1,0 +1,24 @@
+---
+description: PowerShell terminal command conventions for this Windows workspace
+alwaysApply: true
+---
+
+# PowerShell 命令规范
+
+本工作区终端为 Windows PowerShell。运行 Shell 命令时遵守：
+
+- 用 `;` 连接命令，**不要用 `&&`**（PowerShell 不支持 `&&` 作为语句分隔符）。
+- `;` 是无条件顺序执行；若需要「前一条成功才执行下一条」的依赖关系，拆成多次调用，或用 `if ($?) { ... }`。
+- 不要使用 heredoc（`$(cat <<'EOF' ...)`）。多行提交信息改用多个 `-m` 参数，或写入临时文件后 `git commit -F <file>`。
+
+```powershell
+# ❌ BAD
+git add . && git commit -m "msg"
+
+# ✅ GOOD（无依赖时）
+git status; git branch --show-current
+
+# ✅ GOOD（有依赖时，拆成多步或判断 $?）
+git add .
+git commit -m "标题" -m "正文第一段" -m "正文第二段"
+```

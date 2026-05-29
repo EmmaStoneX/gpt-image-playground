@@ -230,6 +230,10 @@ input[type="number"] {
 }
 
 @media (max-width: 640px) {
+  .safe-header-inner {
+    min-height: 3rem;
+  }
+
   input,
   textarea,
   select {
