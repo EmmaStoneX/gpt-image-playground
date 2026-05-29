@@ -275,10 +275,10 @@ export default function SettingsModal() {
     checked: boolean,
     onToggle: () => void,
   ) => (
-    <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-200/70 bg-white/60 px-2.5 py-2 dark:border-white/[0.08] dark:bg-white/[0.03]">
-      <div className="min-w-0">
-        <span className="block text-[13px] font-medium leading-tight text-gray-700 dark:text-gray-200">{title}</span>
-        <span className="block text-[10px] leading-tight text-gray-400 dark:text-gray-500">{desc}</span>
+    <div className="flex h-full items-center justify-between gap-2 rounded-lg border border-gray-200/70 bg-white/60 px-2.5 py-2 dark:border-white/[0.08] dark:bg-white/[0.03]">
+      <div className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-medium leading-tight text-gray-700 dark:text-gray-200">{title}</span>
+        <span className="block truncate text-[10px] leading-tight text-gray-400 dark:text-gray-500">{desc}</span>
       </div>
       <button
         type="button"
@@ -657,7 +657,7 @@ export default function SettingsModal() {
                   )}
                   {renderSwitchCard(
                     '提交后清空输入',
-                    '成功后清空提示词与参考图',
+                    '成功后清空输入',
                     draft.clearInputAfterSubmit,
                     () => commitSettings({ ...draft, clearInputAfterSubmit: !draft.clearInputAfterSubmit }),
                   )}
