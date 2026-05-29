@@ -1262,7 +1262,7 @@ export default function InputBar() {
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={handleKeyDown}
               rows={1}
-              placeholder="描述你想生成的图像，或粘贴 / 拖入参考图…"
+              placeholder={isMobile ? '描述你想生成的图像…' : '描述你想生成的图像，或粘贴 / 拖入参考图…'}
               className="flex-1 min-w-0 bg-transparent border-0 px-1.5 py-2.5 text-sm leading-relaxed resize-none focus:outline-none placeholder:text-gray-400 dark:placeholder:text-gray-500"
             />
 
@@ -1309,17 +1309,17 @@ export default function InputBar() {
               <button
                 onClick={() => settings.apiKey ? submitTask() : setShowSettings(true)}
                 disabled={settings.apiKey ? !canSubmit : false}
-                className={`flex items-center justify-center gap-[7px] h-10 px-4 rounded-[10px] text-sm font-semibold transition-all ${
+                className={`flex items-center justify-center gap-[7px] h-10 w-10 px-0 sm:w-auto sm:px-4 rounded-[10px] text-sm font-semibold transition-all ${
                   !settings.apiKey
                     ? 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer'
                     : 'bg-blue-500 text-white hover:bg-blue-600 disabled:bg-gray-200 dark:disabled:bg-white/[0.06] disabled:text-gray-400 dark:disabled:text-gray-500 disabled:cursor-not-allowed'
                 }`}
                 title={settings.apiKey ? (maskDraft ? '遮罩编辑 (Ctrl+Enter)' : '生成 (Ctrl+Enter)') : '请先配置 API'}
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
                   <path d="M12 19V5M5 12l7-7 7 7" />
                 </svg>
-                <span>{maskDraft ? '遮罩编辑' : '生成'}</span>
+                <span className="hidden sm:inline">{maskDraft ? '遮罩编辑' : '生成'}</span>
               </button>
             </div>
           </div>
