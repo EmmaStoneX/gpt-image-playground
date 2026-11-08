@@ -23,6 +23,20 @@ export default function TaskGrid({ taskIds, workspace = false, waitingCount = 0,
   const startedWithCtrl = useRef(false)
   const initialSelection = useRef<string[]>([])
   const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform)
+  const [columnCount, setColumnCount] = useState(() => window.innerWidth >= 1280 ? 4 : window.innerWidth >= 1024 ? 3 : 2)
+
+  useEffect(() => {
+    const large = window.matchMedia('(min-width: 1024px)')
+    const extraLarge = window.matchMedia('(min-width: 1280px)')
+    const updateColumns = () => setColumnCount(extraLarge.matches ? 4 : large.matches ? 3 : 2)
+    updateColumns()
+    large.addEventListener('change', updateColumns)
+    extraLarge.addEventListener('change', updateColumns)
+    return () => {
+      large.removeEventListener('change', updateColumns)
+      extraLarge.removeEventListener('change', updateColumns)
+    }
+  }, [])
 
   const filteredTasks = useMemo(() => {
     const sorted = [...tasks].sort((a, b) => b.createdAt - a.createdAt)
@@ -43,6 +57,13 @@ export default function TaskGrid({ taskIds, workspace = false, waitingCount = 0,
       return prompt.includes(q) || paramStr.includes(q)
     })
   }, [tasks, taskIds, searchQuery, filterStatus, filterFavorite])
+
+  const columns = useMemo(() => {
+    // 固定任务所属列，避免浏览器在图片加载或悬停重绘时重新平衡整列。
+    const result: (typeof filteredTasks)[] = Array.from({ length: columnCount }, () => [])
+    filteredTasks.forEach((task, index) => result[index % columnCount].push(task))
+    return result
+  }, [filteredTasks, columnCount])
 
   const handleDelete = (task: typeof tasks[0]) => {
     setConfirmDialog({
@@ -196,45 +217,55 @@ export default function TaskGrid({ taskIds, workspace = false, waitingCount = 0,
     )
   }
 
+  const renderTask = (task: (typeof filteredTasks)[number]) => (
+    <div key={task.id} className={workspace ? 'task-card-wrapper min-w-0 overflow-hidden rounded-xl border border-[#e4e4ec] bg-white p-2 shadow-sm dark:border-white/10 dark:bg-gray-900' : 'task-card-wrapper min-w-0'} data-task-id={task.id}>
+      <TaskCard
+        task={task}
+        workspace={workspace}
+        onClick={(e) => {
+          if (Date.now() < suppressClickUntil.current) {
+            e.preventDefault()
+            return
+          }
+          suppressClickUntil.current = 0
+          const isCtrl = isMac ? e.metaKey : e.ctrlKey
+          if (isCtrl) {
+            useStore.getState().toggleTaskSelection(task.id)
+          } else if (selectedTaskIds.length > 0) {
+            clearSelection()
+            setDetailTaskId(task.id)
+          } else {
+            setDetailTaskId(task.id)
+          }
+        }}
+        onReuse={() => reuseConfig(task)}
+        onEditOutputs={() => editOutputs(task)}
+        onDelete={() => handleDelete(task)}
+        isSelected={selectedTaskIds.includes(task.id)}
+      />
+      {workspace && <div className="flex min-h-12 items-center justify-between gap-3 px-2 text-[13px]">
+        <span className="min-w-0 truncate font-medium text-[#18181b] dark:text-gray-100" title={task.prompt}>{task.prompt || '未命名任务'}</span>
+        <span className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-medium ${task.status === 'done' ? 'bg-[#eaf6ff] text-[#087bc0]' : task.status === 'running' ? 'bg-[#eaf6ff] text-[#0d99ff]' : 'bg-[#fff0f0] text-[#ef4444]'}`}>
+          {task.status === 'done' ? '已完成' : task.status === 'running' ? '生成中' : task.falRecoverable ? '恢复中' : '生成失败'}
+        </span>
+      </div>}
+    </div>
+  )
+
   return (
     <div 
       ref={rootRef}
       data-task-grid-root
       className={workspace ? 'relative' : 'relative min-h-[50vh]'}
     >
-      <div ref={gridRef} className={workspace ? 'grid grid-cols-1 gap-5 pb-10 sm:grid-cols-2 xl:grid-cols-3' : 'columns-2 gap-3 pb-10 sm:gap-4 lg:columns-3 xl:columns-4'}>
-        {filteredTasks.map((task) => (
-          <div key={task.id} className={workspace ? 'task-card-wrapper min-w-0 overflow-hidden rounded-xl border border-[#e4e4ec] bg-white p-2 shadow-sm dark:border-white/10 dark:bg-gray-900' : 'task-card-wrapper mb-3 break-inside-avoid sm:mb-4'} data-task-id={task.id}>
-            <TaskCard
-              task={task}
-              workspace={workspace}
-              onClick={(e) => {
-                if (Date.now() < suppressClickUntil.current) {
-                  e.preventDefault()
-                  return
-                }
-                suppressClickUntil.current = 0
-                const isCtrl = isMac ? e.metaKey : e.ctrlKey
-                if (isCtrl) {
-                  useStore.getState().toggleTaskSelection(task.id)
-                } else if (selectedTaskIds.length > 0) {
-                  clearSelection()
-                  setDetailTaskId(task.id)
-                } else {
-                  setDetailTaskId(task.id)
-                }
-              }}
-              onReuse={() => reuseConfig(task)}
-              onEditOutputs={() => editOutputs(task)}
-              onDelete={() => handleDelete(task)}
-              isSelected={selectedTaskIds.includes(task.id)}
-            />
-            {workspace && <div className="flex min-h-12 items-center justify-between gap-3 px-2 text-[13px]">
-              <span className="min-w-0 truncate font-medium text-[#18181b] dark:text-gray-100" title={task.prompt}>{task.prompt || '未命名任务'}</span>
-              <span className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-medium ${task.status === 'done' ? 'bg-[#eaf6ff] text-[#087bc0]' : task.status === 'running' ? 'bg-[#eaf6ff] text-[#0d99ff]' : 'bg-[#fff0f0] text-[#ef4444]'}`}>
-                {task.status === 'done' ? '已完成' : task.status === 'running' ? '生成中' : task.falRecoverable ? '恢复中' : '生成失败'}
-              </span>
-            </div>}
+      <div
+        ref={gridRef}
+        className={workspace ? 'grid grid-cols-1 gap-5 pb-10 sm:grid-cols-2 xl:grid-cols-3' : 'grid items-start gap-3 pb-10 sm:gap-4'}
+        style={workspace ? undefined : { gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
+      >
+        {workspace ? filteredTasks.map(renderTask) : columns.map((column, index) => (
+          <div key={index} className="flex min-w-0 flex-col gap-3 sm:gap-4">
+            {column.map(renderTask)}
           </div>
         ))}
         {workspace && Array.from({ length: waitingCount }, (_, index) => <div key={`waiting-${index}`} className="min-w-0 rounded-xl border border-[#e4e4ec] bg-white p-2 dark:border-white/10 dark:bg-gray-900">
