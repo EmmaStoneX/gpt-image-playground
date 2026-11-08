@@ -91,6 +91,42 @@ export default function HelpModal({ onClose }: HelpModalProps) {
         {/* 内容 */}
         <div className="custom-scrollbar flex-1 space-y-3.5 overflow-y-auto p-5">
           <SectionCard
+            title="模型与输出"
+            icon={<svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>}
+          >
+            <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-300">
+              在输入栏的「模型」中切换模型；要添加更多模型，在「设置 → API 配置」的「模型 ID」中用逗号分隔。尺寸、质量和格式可在输入栏高级参数中调整，SVG、GIF 与复杂度只在支持的模型下可用。
+            </p>
+          </SectionCard>
+
+          <SectionCard
+            title="批量提示词"
+            icon={<svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" /><path d="M2 6h1M2 12h1M2 18h1" /></svg>}
+          >
+            <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-300">
+              勾选输入栏的「批量提示词」，用两个空行分隔至少两条提示词。可选排队或并发提交；点击「批量生成」后，在「批量任务」查看进度，需要时可停止后续提交。
+            </p>
+          </SectionCard>
+
+          <SectionCard
+            title="画板与评论"
+            icon={<svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M4 20h16M6 16l9-9 3 3-9 9H6v-3ZM14 8l2-2a2 2 0 0 1 3 3l-2 2" /></svg>}
+          >
+            <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-300">
+              添加参考图后，点击第一张缩略图上的「画板」。可绘制线条、形状和文字，或用「评论」工具在图上放置标记并填写修改建议；点击「完成」保存，生成时会带上标注与评论。
+            </p>
+          </SectionCard>
+
+          <SectionCard
+            title="流式预览与失败处理"
+            icon={<svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 1 3 7M3 17v-5h5M12 7v5l3 2" /></svg>}
+          >
+            <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-300">
+              在「设置 → 生成行为」开启流式预览后，生成中的卡片可显示中间图像。fal 队列任务断线后会尝试恢复；OpenAI 请求中断后可到「流式与恢复」手动重试。失败卡片上可直接点「重试」或「删除」。
+            </p>
+          </SectionCard>
+
+          <SectionCard
             title="多选记录"
             icon={
               isMobile ? (
@@ -137,6 +173,15 @@ export default function HelpModal({ onClose }: HelpModalProps) {
           >
             <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-300">
               选中记录后，页面底部会出现操作栏，可批量收藏、批量删除，或一键全选当前可见的记录。
+            </p>
+          </SectionCard>
+
+          <SectionCard
+            title="配置链接"
+            icon={<svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-2 2M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l2-2" /></svg>}
+          >
+            <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-300">
+              打开带有 API 配置参数的链接时，参数会应用到当前配置，随后从地址栏移除。含有 API 密钥的链接不要转发给他人。
             </p>
           </SectionCard>
         </div>
