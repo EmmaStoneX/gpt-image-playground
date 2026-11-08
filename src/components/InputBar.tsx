@@ -972,25 +972,6 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
           </div>
 
           <div className="flex flex-wrap items-center gap-2 px-1 pb-2 text-xs text-gray-500 dark:text-gray-400">
-            <label className="flex min-w-0 items-center gap-1.5">模型
-              <span className="relative block min-w-0">
-                <select
-                  aria-label="生成模型"
-                  value={activeProfile.model}
-                  onChange={(event) => setSettings({ profiles: settings.profiles.map((profile) => profile.id === activeProfile.id ? {
-                    ...profile,
-                    model: configuredModels.includes(event.target.value) ? profile.model : [...configuredModels, event.target.value].join(', '),
-                    selectedModel: event.target.value,
-                  } : profile) })}
-                  disabled={Boolean(batchProgress)}
-                  title={modelOptions.length === 1 ? '在设置的 API 配置中添加模型，或等待上游模型列表加载' : undefined}
-                  className="h-7 w-40 appearance-none rounded-lg border border-[#e4e4ec] bg-[#f6f6f9] pl-2.5 pr-7 text-xs font-medium text-[#18181b] outline-none focus:border-[#0d99ff] disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-100 sm:w-52"
-                >
-                  {modelOptions.map((model) => <option key={model} value={model}>{model}</option>)}
-                </select>
-                <svg className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#71717a]" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-              </span>
-            </label>
             <label className="flex items-center gap-1.5 cursor-pointer">
               <input type="checkbox" checked={settings.batchPromptEnabled} onChange={(e) => setSettings({ batchPromptEnabled: e.target.checked })} disabled={Boolean(batchProgress)} />
               批量提示词
@@ -1035,6 +1016,25 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
           {/* 高级参数抽屉 */}
           <div className={`collapse-section${showAdvanced ? '' : ' collapsed'}`}>
             <div className="collapse-inner px-1 pt-1">
+              <label className="mb-2 flex min-w-0 items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">模型
+                <span className="relative block min-w-0">
+                  <select
+                    aria-label="生成模型"
+                    value={activeProfile.model}
+                    onChange={(event) => setSettings({ profiles: settings.profiles.map((profile) => profile.id === activeProfile.id ? {
+                      ...profile,
+                      model: configuredModels.includes(event.target.value) ? profile.model : [...configuredModels, event.target.value].join(', '),
+                      selectedModel: event.target.value,
+                    } : profile) })}
+                    disabled={Boolean(batchProgress)}
+                    title={modelOptions.length === 1 ? '在设置的 API 配置中添加模型，或等待上游模型列表加载' : undefined}
+                    className="h-7 w-40 appearance-none rounded-lg border border-[#e4e4ec] bg-[#f6f6f9] pl-2.5 pr-7 text-xs font-medium text-[#18181b] outline-none focus:border-[#0d99ff] disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-100 sm:w-52"
+                  >
+                    {modelOptions.map((model) => <option key={model} value={model}>{model}</option>)}
+                  </select>
+                  <svg className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#71717a]" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                </span>
+              </label>
               {renderParams(`grid-cols-2 ${paramCols}`)}
               <div className="h-2" />
             </div>
