@@ -166,8 +166,14 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
   const paramDisabled = getParamDisabledReasons(settings)
   const showCompression = !isFalProvider && (params.output_format === 'jpeg' || params.output_format === 'webp')
   const showGifParams = params.output_format === 'gif'
-  const paramCount = 2 + Number(!paramDisabled.complexity) + Number(showCompression) + (showGifParams ? 2 : 0)
-  const paramCols = paramCount === 5 ? 'sm:grid-cols-5' : paramCount === 4 ? 'sm:grid-cols-4' : paramCount === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'
+  const paramCount = 3 + Number(!paramDisabled.complexity) + Number(showCompression) + (showGifParams ? 2 : 0)
+  const paramCols = paramCount === 6
+    ? 'sm:grid-cols-[minmax(0,1.5fr)_repeat(5,minmax(0,1fr))]'
+    : paramCount === 5
+    ? 'sm:grid-cols-[minmax(0,1.5fr)_repeat(4,minmax(0,1fr))]'
+    : paramCount === 4
+    ? 'sm:grid-cols-[minmax(0,1.5fr)_repeat(3,minmax(0,1fr))]'
+    : 'sm:grid-cols-[minmax(0,1.5fr)_repeat(2,minmax(0,1fr))]'
   const displaySize = isFalProvider && params.size === 'auto'
     ? DEFAULT_FAL_IMAGE_SIZE
     : normalizeImageSize(params.size) || DEFAULT_PARAMS.size
@@ -788,6 +794,26 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
 
   const renderParams = (cols: string) => (
     <div className={`grid ${cols} gap-2 text-xs flex-1`}>
+      <label className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-gray-400 dark:text-gray-500 ml-1">模型</span>
+        <span className="relative block w-full min-w-0">
+          <select
+            aria-label="生成模型"
+            value={activeProfile.model}
+            onChange={(event) => setSettings({ profiles: settings.profiles.map((profile) => profile.id === activeProfile.id ? {
+              ...profile,
+              model: configuredModels.includes(event.target.value) ? profile.model : [...configuredModels, event.target.value].join(', '),
+              selectedModel: event.target.value,
+            } : profile) })}
+            disabled={Boolean(batchProgress)}
+            title={modelOptions.length === 1 ? '在设置的 API 配置中添加模型，或等待上游模型列表加载' : undefined}
+            className={`${selectClass} w-full min-w-0 appearance-none pr-7 focus:outline-none focus:border-blue-500 disabled:opacity-60`}
+          >
+            {modelOptions.map((model) => <option key={model} value={model}>{model}</option>)}
+          </select>
+          <svg className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#71717a]" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+        </span>
+      </label>
       <label
         className="relative flex flex-col gap-0.5"
         onMouseEnter={showSizeHint}
@@ -1016,25 +1042,6 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
           {/* 高级参数抽屉 */}
           <div className={`collapse-section${showAdvanced ? '' : ' collapsed'}`}>
             <div className="collapse-inner px-1 pt-1">
-              <label className="mb-2 flex min-w-0 items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">模型
-                <span className="relative block min-w-0">
-                  <select
-                    aria-label="生成模型"
-                    value={activeProfile.model}
-                    onChange={(event) => setSettings({ profiles: settings.profiles.map((profile) => profile.id === activeProfile.id ? {
-                      ...profile,
-                      model: configuredModels.includes(event.target.value) ? profile.model : [...configuredModels, event.target.value].join(', '),
-                      selectedModel: event.target.value,
-                    } : profile) })}
-                    disabled={Boolean(batchProgress)}
-                    title={modelOptions.length === 1 ? '在设置的 API 配置中添加模型，或等待上游模型列表加载' : undefined}
-                    className="h-7 w-40 appearance-none rounded-lg border border-[#e4e4ec] bg-[#f6f6f9] pl-2.5 pr-7 text-xs font-medium text-[#18181b] outline-none focus:border-[#0d99ff] disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-100 sm:w-52"
-                  >
-                    {modelOptions.map((model) => <option key={model} value={model}>{model}</option>)}
-                  </select>
-                  <svg className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#71717a]" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-                </span>
-              </label>
               {renderParams(`grid-cols-2 ${paramCols}`)}
               <div className="h-2" />
             </div>
