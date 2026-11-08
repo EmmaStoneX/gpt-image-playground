@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 interface Option {
   label: string
   value: string | number
+  disabledReason?: string
 }
 
 interface SelectProps {
@@ -75,17 +76,20 @@ export default function Select({ value, onChange, options, disabled, className }
           {options.map((option) => (
             <div
               key={option.value}
+              title={option.disabledReason}
+              aria-disabled={Boolean(option.disabledReason)}
               onClick={() => {
+                if (option.disabledReason) return
                 onChange(option.value)
                 setIsOpen(false)
               }}
-              className={`px-3 py-2 text-xs cursor-pointer transition-colors ${
+              className={`px-3 py-2 text-xs cursor-pointer transition-colors ${option.disabledReason ? 'opacity-50 !cursor-not-allowed' : ''} ${
                 option.value === value
                   ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium'
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/[0.06]'
               }`}
             >
-              {option.label}
+              {option.label}{option.disabledReason && <span className="block text-[10px]">{option.disabledReason}</span>}
             </div>
           ))}
         </div>

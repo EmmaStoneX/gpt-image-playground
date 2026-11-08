@@ -1,8 +1,10 @@
-import type { ApiProfile, ImageApiResponse, ResponsesApiResponse, TaskParams } from '../types'
+import type { ApiProfile, ImageApiResponse, ImageResponseItem, ResponsesApiResponse, ResponsesOutputItem, TaskParams } from '../types'
 import { dataUrlToBlob, imageDataUrlToPngBlob, maskDataUrlToPngBlob } from './canvasImage'
 import { buildApiUrl, isApiProxyAvailable, readClientDevProxyConfig } from './devProxy'
+import { isEventStreamResponse, readJsonServerSentEvents } from './serverSentEvents'
 import {
   assertImageInputPayloadSize,
+  applyGptImage26Params,
   assertMaskEditFileSize,
   type CallApiOptions,
   type CallApiResult,
@@ -40,6 +42,8 @@ function createResponsesImageTool(
     size: params.size,
     output_format: params.output_format,
   }
+  if (profile.imageGenerationModel?.trim()) tool.model = profile.imageGenerationModel.trim()
+  if (profile.streamImages && params.output_format !== 'svg' && params.output_format !== 'gif') tool.partial_images = profile.streamPartialImages ?? 1
 
   if (!profile.codexCli) {
     tool.quality = params.quality
@@ -54,6 +58,7 @@ function createResponsesImageTool(
       image_url: maskDataUrl,
     }
   }
+  applyGptImage26Params(tool, params, profile)
 
   return tool
 }
@@ -108,6 +113,48 @@ function parseResponsesImageResults(payload: ResponsesApiResponse, fallbackMime:
   return results
 }
 
+function streamError(event: Record<string, unknown>): string | null {
+  const error = event.error
+  if (error && typeof error === 'object' && typeof (error as Record<string, unknown>).message === 'string') return String((error as Record<string, unknown>).message)
+  if (typeof error === 'string') return error
+  if (typeof event.type === 'string' && event.type.endsWith('.failed')) return typeof event.message === 'string' ? event.message : '流式请求失败'
+  return null
+}
+
+async function readImagesStream(response: Response, mime: string, opts: CallApiOptions, signal: AbortSignal): Promise<ImageApiResponse> {
+  let payload: ImageApiResponse | null = null
+  const completed: ImageResponseItem[] = []
+  await readJsonServerSentEvents(response, (event) => {
+    if (event.type === 'image_generation.partial_image' || event.type === 'image_edit.partial_image') {
+      if (typeof event.b64_json === 'string') opts.onPartialImage?.(normalizeBase64Image(event.b64_json, mime))
+    } else if (event.object === 'image.generation.result' || event.object === 'image.edit.result') {
+      payload = event as unknown as ImageApiResponse
+    } else if (event.type === 'image_generation.completed' || event.type === 'image_edit.completed') {
+      completed.push(event as ImageResponseItem)
+    }
+  }, { signals: [signal], getEventErrorMessage: streamError })
+  const result: ImageApiResponse = payload ?? { data: completed }
+  if (!result.data?.length) throw new Error('流式接口未返回最终图片数据')
+  return result
+}
+
+async function readResponsesStream(response: Response, mime: string, opts: CallApiOptions, signal: AbortSignal): Promise<ResponsesApiResponse> {
+  let payload: ResponsesApiResponse | null = null
+  const completed: ResponsesOutputItem[] = []
+  await readJsonServerSentEvents(response, (event) => {
+    if (event.type === 'response.image_generation_call.partial_image') {
+      if (typeof event.partial_image_b64 === 'string') opts.onPartialImage?.(normalizeBase64Image(event.partial_image_b64, mime))
+    } else if (event.type === 'response.output_item.done' && event.item && typeof event.item === 'object') {
+      completed.push(event.item as ResponsesOutputItem)
+    } else if (event.response && typeof event.response === 'object') {
+      payload = event.response as ResponsesApiResponse
+    }
+  }, { signals: [signal], getEventErrorMessage: streamError })
+  const result: ResponsesApiResponse = payload ?? { output: completed }
+  if (!result.output?.length) throw new Error('流式接口未返回最终图片数据')
+  return result
+}
+
 export async function callOpenAICompatibleImageApi(opts: CallApiOptions, profile: ApiProfile): Promise<CallApiResult> {
   return profile.apiMode === 'responses'
     ? callResponsesImageApi(opts, profile)
@@ -116,7 +163,8 @@ export async function callOpenAICompatibleImageApi(opts: CallApiOptions, profile
 
 async function callImagesApi(opts: CallApiOptions, profile: ApiProfile): Promise<CallApiResult> {
   const n = opts.params.n > 0 ? opts.params.n : 1
-  if (profile.codexCli && n > 1) {
+  const streamEnabled = profile.streamImages && opts.params.output_format !== 'svg' && opts.params.output_format !== 'gif'
+  if ((profile.codexCli || streamEnabled || opts.params.output_format === 'svg') && n > 1) {
     return callImagesApiConcurrent(opts, profile, n)
   }
 
@@ -124,7 +172,7 @@ async function callImagesApi(opts: CallApiOptions, profile: ApiProfile): Promise
 }
 
 async function callImagesApiConcurrent(opts: CallApiOptions, profile: ApiProfile, n: number): Promise<CallApiResult> {
-  const singleOpts = { ...opts, params: { ...opts.params, n: 1, quality: 'auto' as const } }
+  const singleOpts = { ...opts, params: { ...opts.params, n: 1, ...(profile.codexCli ? { quality: 'auto' as const } : {}) } }
   const results = await Promise.allSettled(
     Array.from({ length: n }).map(() => callImagesApiSingle(singleOpts, profile)),
   )
@@ -161,6 +209,7 @@ async function callImagesApiSingle(opts: CallApiOptions, profile: ApiProfile): P
     : originalPrompt
   const isEdit = inputImageDataUrls.length > 0
   const mime = MIME_MAP[params.output_format] || 'image/png'
+  const streamEnabled = profile.streamImages && params.output_format !== 'svg' && params.output_format !== 'gif'
   const proxyConfig = readClientDevProxyConfig()
   const useApiProxy = profile.apiProxy && isApiProxyAvailable(proxyConfig)
   const requestHeaders = createRequestHeaders(profile)
@@ -189,6 +238,13 @@ async function callImagesApiSingle(opts: CallApiOptions, profile: ApiProfile): P
       if (params.n > 1) {
         formData.append('n', String(params.n))
       }
+      if (streamEnabled) {
+        formData.append('stream', 'true')
+        formData.append('partial_images', String(profile.streamPartialImages ?? 1))
+      }
+      const extraParams: Record<string, unknown> = {}
+      applyGptImage26Params(extraParams, params, profile)
+      for (const [key, value] of Object.entries(extraParams)) formData.append(key, typeof value === 'string' ? value : JSON.stringify(value))
 
       const imageBlobs: Blob[] = []
       for (let i = 0; i < inputImageDataUrls.length; i++) {
@@ -217,6 +273,11 @@ async function callImagesApiSingle(opts: CallApiOptions, profile: ApiProfile): P
       if (maskBlob) {
         formData.append('mask', maskBlob, 'mask.png')
       }
+      if (opts.markupDataUrl) {
+        const markupBlob = await dataUrlToBlob(opts.markupDataUrl, 'image/png')
+        assertMaskEditFileSize('标注文件', markupBlob.size)
+        formData.append('markup', markupBlob, 'markup.png')
+      }
 
       response = await fetch(buildApiUrl(profile.baseUrl, 'images/edits', proxyConfig, useApiProxy), {
         method: 'POST',
@@ -244,6 +305,11 @@ async function callImagesApiSingle(opts: CallApiOptions, profile: ApiProfile): P
       if (params.n > 1) {
         body.n = params.n
       }
+      if (streamEnabled) {
+        body.stream = true
+        body.partial_images = profile.streamPartialImages ?? 1
+      }
+      applyGptImage26Params(body, params, profile)
 
       response = await fetch(buildApiUrl(profile.baseUrl, 'images/generations', proxyConfig, useApiProxy), {
         method: 'POST',
@@ -261,7 +327,9 @@ async function callImagesApiSingle(opts: CallApiOptions, profile: ApiProfile): P
       throw new Error(await getApiErrorMessage(response))
     }
 
-    const payload = await response.json() as ImageApiResponse
+    const payload = streamEnabled && isEventStreamResponse(response)
+      ? await readImagesStream(response, mime, opts, controller.signal)
+      : await response.json() as ImageApiResponse
     const data = payload.data
     if (!Array.isArray(data) || !data.length) {
       throw new Error('接口未返回图片数据')
@@ -338,6 +406,7 @@ async function callResponsesImageApi(opts: CallApiOptions, profile: ApiProfile):
 async function callResponsesImageApiSingle(opts: CallApiOptions, profile: ApiProfile): Promise<CallApiResult> {
   const { prompt, params, inputImageDataUrls } = opts
   const mime = MIME_MAP[params.output_format] || 'image/png'
+  const streamEnabled = profile.streamImages && params.output_format !== 'svg' && params.output_format !== 'gif'
   const proxyConfig = readClientDevProxyConfig()
   const useApiProxy = profile.apiProxy && isApiProxyAvailable(proxyConfig)
   const requestHeaders = createRequestHeaders(profile)
@@ -359,6 +428,7 @@ async function callResponsesImageApiSingle(opts: CallApiOptions, profile: ApiPro
       input: createResponsesInput(prompt, inputImageDataUrls),
       tools: [createResponsesImageTool(params, inputImageDataUrls.length > 0, profile, opts.maskDataUrl)],
       tool_choice: 'required',
+      ...(streamEnabled ? { stream: true } : {}),
     }
 
     const response = await fetch(buildApiUrl(profile.baseUrl, 'responses', proxyConfig, useApiProxy), {
@@ -376,7 +446,9 @@ async function callResponsesImageApiSingle(opts: CallApiOptions, profile: ApiPro
       throw new Error(await getApiErrorMessage(response))
     }
 
-    const payload = await response.json() as ResponsesApiResponse
+    const payload = streamEnabled && isEventStreamResponse(response)
+      ? await readResponsesStream(response, mime, opts, controller.signal)
+      : await response.json() as ResponsesApiResponse
     const imageResults = parseResponsesImageResults(payload, mime)
     const actualParams = mergeActualParams(
       imageResults[0]?.actualParams ?? {},

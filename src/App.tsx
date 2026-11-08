@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { initStore } from './store'
 import { useStore } from './store'
 import { normalizeBaseUrl } from './lib/api'
@@ -7,6 +7,7 @@ import { useDockerApiUrlMigrationNotice } from './hooks/useDockerApiUrlMigration
 import type { ApiMode, ApiProvider, AppSettings } from './types'
 import Header from './components/Header'
 import TaskGrid from './components/TaskGrid'
+import TaskWorkspace from './components/TaskWorkspace'
 import InputBar from './components/InputBar'
 import DetailModal from './components/DetailModal'
 import Lightbox from './components/Lightbox'
@@ -18,7 +19,17 @@ import ImageContextMenu from './components/ImageContextMenu'
 
 export default function App() {
   const setSettings = useStore((s) => s.setSettings)
+  const tasks = useStore((s) => s.tasks)
+  const batchProgress = useStore((s) => s.batchProgress)
+  const [taskView, setTaskView] = useState<'all' | 'batch' | 'stream'>('all')
+  const latestBatchId = tasks.reduce((latest, task) => Math.max(latest, task.batchId ?? 0), 0)
+  const selectedBatchId = batchProgress?.id ?? latestBatchId
+  const hasStreamTasks = taskView === 'stream' || tasks.some((task) => task.status === 'running' || task.status === 'error')
   useDockerApiUrlMigrationNotice()
+
+  useEffect(() => {
+    if (batchProgress?.id) setTaskView('batch')
+  }, [batchProgress?.id])
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search)
@@ -86,7 +97,18 @@ export default function App() {
       window.history.replaceState(null, '', nextUrl)
     }
 
-    initStore()
+    void initStore().then(async () => {
+      if (import.meta.env.DEV && searchParams.get('layoutTest') === '1') {
+        const { loadLayoutFixtures } = await import('./dev/layoutFixtures')
+        await loadLayoutFixtures()
+      }
+      const uiTest = searchParams.get('uiTest')
+      if (import.meta.env.DEV && (uiTest === 'batch' || uiTest === 'stream')) {
+        const { loadWorkspaceFixtures } = await import('./dev/layoutFixtures')
+        await loadWorkspaceFixtures(uiTest)
+        setTaskView(uiTest)
+      }
+    })
   }, [setSettings])
 
   useEffect(() => {
@@ -104,11 +126,16 @@ export default function App() {
     <>
       <Header />
       <main data-home-main data-drag-select-surface className="pb-48">
-        <div className="safe-area-x max-w-7xl mx-auto pt-6">
-          <TaskGrid />
+        <div className="safe-area-x mx-auto max-w-[1344px] pt-6">
+          {(selectedBatchId > 0 || hasStreamTasks) && <nav aria-label="任务视图" className="mb-6 flex flex-wrap items-center gap-1 rounded-[10px] border border-[#e4e4ec] bg-white p-1 text-[13px] dark:border-white/10 dark:bg-gray-900 sm:w-fit">
+            <button type="button" onClick={() => setTaskView('all')} aria-current={taskView === 'all' ? 'page' : undefined} className={`rounded-[7px] px-3 py-1.5 ${taskView === 'all' ? 'bg-[#eaf6ff] font-medium text-[#087bc0] dark:bg-blue-500/15 dark:text-blue-300' : 'text-[#5b5b66] hover:bg-[#f6f6f9] dark:text-gray-400 dark:hover:bg-white/5'}`}>全部任务</button>
+            {selectedBatchId > 0 && <button type="button" onClick={() => setTaskView('batch')} aria-current={taskView === 'batch' ? 'page' : undefined} className={`rounded-[7px] px-3 py-1.5 ${taskView === 'batch' ? 'bg-[#eaf6ff] font-medium text-[#087bc0] dark:bg-blue-500/15 dark:text-blue-300' : 'text-[#5b5b66] hover:bg-[#f6f6f9] dark:text-gray-400 dark:hover:bg-white/5'}`}>批量任务</button>}
+            {hasStreamTasks && <button type="button" onClick={() => setTaskView('stream')} aria-current={taskView === 'stream' ? 'page' : undefined} className={`rounded-[7px] px-3 py-1.5 ${taskView === 'stream' ? 'bg-[#eaf6ff] font-medium text-[#087bc0] dark:bg-blue-500/15 dark:text-blue-300' : 'text-[#5b5b66] hover:bg-[#f6f6f9] dark:text-gray-400 dark:hover:bg-white/5'}`}>流式与恢复</button>}
+          </nav>}
+          {taskView === 'batch' && selectedBatchId > 0 ? <TaskWorkspace mode="batch" batchId={selectedBatchId} /> : taskView === 'stream' && hasStreamTasks ? <TaskWorkspace mode="stream" /> : <TaskGrid />}
         </div>
       </main>
-      <InputBar />
+      <InputBar hideBatchProgress={taskView === 'batch' && selectedBatchId > 0} />
       <DetailModal />
       <Lightbox />
       <SettingsModal />

@@ -4,8 +4,10 @@ import type {
   AppSettings,
   TaskParams,
   InputImage,
+  ImageComment,
   MaskDraft,
   TaskRecord,
+  RetryMode,
   ExportData,
 } from './types'
 import { DEFAULT_PARAMS } from './types'
@@ -26,7 +28,9 @@ import { callImageApi } from './lib/api'
 import { getFalErrorMessage, getFalQueuedImageResult, getFalQueueStatus } from './lib/falAiImageApi'
 import { validateMaskMatchesImage } from './lib/canvasImage'
 import { orderInputImagesForMask } from './lib/mask'
-import { getChangedParams, normalizeParamsForSettings } from './lib/paramCompatibility'
+import { getChangedParams, normalizeParamsForSettings, normalizeStoredTaskParams } from './lib/paramCompatibility'
+import { runWithConcurrency, splitBatchPrompts } from './lib/batchPrompts'
+import { appendImageComments } from './lib/imageComments'
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate'
 
 // ===== Image cache =====
@@ -36,6 +40,9 @@ const imageCache = new Map<string, string>()
 const FAL_RECOVERY_POLL_MS = 10_000
 const falRecoveryTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const openAIWatchdogTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const batchTaskIds = new Set<string>()
+const taskRunEpochs = new Map<string, number>()
+const requestSettingsByTaskId = new Map<string, AppSettings>()
 const OPENAI_INTERRUPTED_ERROR = '请求中断'
 
 function createOpenAITimeoutError(timeoutSeconds: number) {
@@ -93,6 +100,10 @@ interface AppState {
   // 参数
   params: TaskParams
   setParams: (p: Partial<TaskParams>) => void
+  streamPreviews: Record<string, string>
+  setStreamPreview: (taskId: string, image: string | null) => void
+  batchProgress: { id: number; total: number; started: number; finished: number } | null
+  setBatchProgress: (progress: AppState['batchProgress']) => void
 
   // 任务列表
   tasks: TaskRecord[]
@@ -203,7 +214,10 @@ export const useStore = create<AppState>()(
         }),
       clearInputImages: () =>
         set((s) => {
-          for (const img of s.inputImages) imageCache.delete(img.id)
+          for (const img of s.inputImages) {
+            imageCache.delete(img.id)
+            if (img.markupImageId) imageCache.delete(img.markupImageId)
+          }
           return { inputImages: [], maskDraft: null, maskEditorImageId: null }
         }),
       setInputImages: (imgs) =>
@@ -243,6 +257,15 @@ export const useStore = create<AppState>()(
       // Params
       params: { ...DEFAULT_PARAMS },
       setParams: (p) => set((s) => ({ params: { ...s.params, ...p } })),
+      streamPreviews: {},
+      setStreamPreview: (taskId, image) => set((s) => {
+        const streamPreviews = { ...s.streamPreviews }
+        if (image) streamPreviews[taskId] = image
+        else delete streamPreviews[taskId]
+        return { streamPreviews }
+      }),
+      batchProgress: null,
+      setBatchProgress: (batchProgress) => set({ batchProgress }),
 
       // Tasks
       tasks: [],
@@ -302,9 +325,20 @@ export const useStore = create<AppState>()(
         settings: state.settings,
         params: state.params,
         prompt: state.prompt,
-        inputImages: state.inputImages.map((img) => ({ id: img.id, dataUrl: '' })),
+        inputImages: state.inputImages.map((img) => ({ id: img.id, dataUrl: '', markupImageId: img.markupImageId, comments: img.comments })),
         dismissedCodexCliPrompts: state.dismissedCodexCliPrompts,
       }),
+      merge: (persisted, current) => {
+        const saved = persisted as Partial<AppState> | undefined
+        return {
+          ...current,
+          ...saved,
+          settings: normalizeSettings(saved?.settings ?? current.settings),
+          params: normalizeStoredTaskParams(saved?.params),
+          streamPreviews: {},
+          batchProgress: null,
+        }
+      },
     },
   ),
 )
@@ -314,6 +348,24 @@ export const useStore = create<AppState>()(
 let uid = 0
 function genId(): string {
   return Date.now().toString(36) + (++uid).toString(36) + Math.random().toString(36).slice(2, 6)
+}
+
+export async function saveInputSketch(imageId: string, markupDataUrl: string | null, comments: ImageComment[]) {
+  const previousMarkupId = useStore.getState().inputImages.find((image) => image.id === imageId)?.markupImageId
+  const markupImageId = markupDataUrl ? await storeImage(markupDataUrl, 'upload') : undefined
+  if (markupImageId && markupDataUrl) imageCache.set(markupImageId, markupDataUrl)
+  useStore.getState().setInputImages(useStore.getState().inputImages.map((image) =>
+    image.id === imageId ? { ...image, markupImageId, comments } : image,
+  ))
+  if (previousMarkupId && previousMarkupId !== markupImageId) {
+    const state = useStore.getState()
+    const stillUsed = state.inputImages.some((image) => image.markupImageId === previousMarkupId) ||
+      state.tasks.some((task) => task.markupImageId === previousMarkupId)
+    if (!stillUsed) {
+      await deleteImage(previousMarkupId)
+      imageCache.delete(previousMarkupId)
+    }
+  }
 }
 
 export function getCodexCliPromptKey(settings: AppSettings): string {
@@ -405,12 +457,13 @@ export function showCodexCliPrompt(force = false, reason = '接口返回的提�
 
 function getFalRecoveryProfile(settings: AppSettings, task: TaskRecord) {
   const normalized = normalizeSettings(settings)
-  const active = getActiveApiProfile(normalized)
-  if (active.provider === 'fal') return active
-  return normalized.profiles.find((profile) =>
+  const matching = normalized.profiles.find((profile) => profile.provider === 'fal' && profile.id === task.apiProfileId)
+    ?? normalized.profiles.find((profile) =>
     profile.provider === 'fal' &&
     (profile.name === task.apiProfileName || profile.model === task.apiModel),
-  ) ?? normalized.profiles.find((profile) => profile.provider === 'fal') ?? null
+    )
+  const active = getActiveApiProfile(normalized)
+  return matching ?? (active.provider === 'fal' ? active : normalized.profiles.find((profile) => profile.provider === 'fal') ?? null)
 }
 
 function isFalConnectionRecoverableError(err: unknown) {
@@ -434,16 +487,25 @@ function scheduleFalRecovery(taskId: string, delayMs = FAL_RECOVERY_POLL_MS) {
   falRecoveryTimers.set(taskId, timer)
 }
 
-async function completeRecoveredFalTask(task: TaskRecord, result: Awaited<ReturnType<typeof getFalQueuedImageResult>>) {
+function isCurrentFalRecovery(task: TaskRecord) {
   const latest = useStore.getState().tasks.find((item) => item.id === task.id)
-  if (!latest || latest.status === 'done') return
+  return Boolean(latest && latest.apiProvider === 'fal' &&
+    latest.falRequestId === task.falRequestId &&
+    latest.falEndpoint === task.falEndpoint &&
+    (latest.status === 'running' || latest.falRecoverable))
+}
+
+async function completeRecoveredFalTask(task: TaskRecord, result: Awaited<ReturnType<typeof getFalQueuedImageResult>>) {
+  if (!isCurrentFalRecovery(task)) return
 
   const outputIds: string[] = []
   for (const dataUrl of result.images) {
+    if (!isCurrentFalRecovery(task)) return
     const imgId = await storeImage(dataUrl, 'generated')
     imageCache.set(imgId, dataUrl)
     outputIds.push(imgId)
   }
+  if (!isCurrentFalRecovery(task)) return
 
   updateTaskInStore(task.id, {
     outputImages: outputIds,
@@ -462,7 +524,8 @@ async function completeRecoveredFalTask(task: TaskRecord, result: Awaited<Return
 async function recoverFalTask(taskId: string) {
   const { settings, tasks } = useStore.getState()
   const task = tasks.find((item) => item.id === taskId)
-  if (!task || task.apiProvider !== 'fal' || !task.falRequestId || !task.falEndpoint || task.status === 'done') return
+  if (!task || task.apiProvider !== 'fal' || !task.falRequestId || !task.falEndpoint ||
+    (task.status !== 'running' && !task.falRecoverable)) return
 
   const profile = getFalRecoveryProfile(settings, task)
   if (!profile) {
@@ -472,9 +535,11 @@ async function recoverFalTask(taskId: string) {
 
   try {
     const status = await getFalQueueStatus(profile, task.falEndpoint, task.falRequestId)
+    if (!isCurrentFalRecovery(task)) return
     if (status.status === 'COMPLETED') {
       clearFalRecoveryTimer(taskId)
       const result = await getFalQueuedImageResult(profile, task.falEndpoint, task.falRequestId, task.params)
+      if (!isCurrentFalRecovery(task)) return
       await completeRecoveredFalTask(task, result)
       return
     }
@@ -490,6 +555,7 @@ async function recoverFalTask(taskId: string) {
     }
     scheduleFalRecovery(taskId)
   } catch (err) {
+    if (!isCurrentFalRecovery(task)) return
     if (isFalConnectionRecoverableError(err)) {
       scheduleFalRecovery(taskId)
       return
@@ -508,7 +574,7 @@ async function recoverFalTask(taskId: string) {
 
 /** 初始化：从 IndexedDB 加载任务和图片缓存，清理孤立图片 */
 export async function initStore() {
-  const storedTasks = await getAllTasks()
+  const storedTasks = (await getAllTasks()).map((task) => ({ ...task, params: normalizeStoredTaskParams(task.params) }))
   const { tasks, interruptedTasks } = markInterruptedOpenAIRunningTasks(storedTasks)
   await Promise.all(interruptedTasks.map((task) => putTask(task)))
   useStore.getState().setTasks(tasks)
@@ -527,9 +593,11 @@ export async function initStore() {
   const referencedIds = new Set<string>()
   const persistedInputImages = useStore.getState().inputImages
   for (const img of persistedInputImages) referencedIds.add(img.id)
+  for (const img of persistedInputImages) if (img.markupImageId) referencedIds.add(img.markupImageId)
   for (const t of tasks) {
     for (const id of t.inputImageIds || []) referencedIds.add(id)
     if (t.maskImageId) referencedIds.add(t.maskImageId)
+    if (t.markupImageId) referencedIds.add(t.markupImageId)
     for (const id of t.outputImages || []) {
       referencedIds.add(id)
     }
@@ -557,6 +625,11 @@ export async function initStore() {
 export async function submitTask(options: { allowFullMask?: boolean } = {}) {
   const { settings, prompt, inputImages, maskDraft, params, showToast, setConfirmDialog } =
     useStore.getState()
+  const batchPrompts = settings.batchPromptEnabled ? splitBatchPrompts(prompt) : []
+  if (useStore.getState().batchProgress) {
+    showToast('批量任务进行中，请等待完成或停止后再提交', 'error')
+    return
+  }
 
   const activeProfile = getActiveApiProfile(settings)
   if (validateApiProfile(activeProfile)) {
@@ -569,7 +642,14 @@ export async function submitTask(options: { allowFullMask?: boolean } = {}) {
     showToast('请输入提示词', 'error')
     return
   }
-
+  if (inputImages.length > 0 && params.output_format === 'svg') {
+    showToast('SVG 只能用于文生图，请移除参考图或切换格式', 'error')
+    return
+  }
+  if (settings.batchPromptEnabled && batchPrompts.length < 2) {
+    showToast('批量模式需要至少两条提示词；请用两个空行分隔', 'error')
+    return
+  }
   let orderedInputImages = inputImages
   let maskImageId: string | null = null
   let maskTargetImageId: string | null = null
@@ -603,8 +683,11 @@ export async function submitTask(options: { allowFullMask?: boolean } = {}) {
   }
 
   // 持久化输入图片到 IndexedDB（此前只在内存缓存中）
-  for (const img of orderedInputImages) {
-    await storeImage(img.dataUrl)
+  try {
+    for (const img of orderedInputImages) await storeImage(img.dataUrl)
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : String(error), 'error')
+    return
   }
 
   const normalizedParams = normalizeParamsForSettings(params, settings)
@@ -612,41 +695,115 @@ export async function submitTask(options: { allowFullMask?: boolean } = {}) {
   if (Object.keys(normalizedParamPatch).length) {
     useStore.getState().setParams(normalizedParamPatch)
   }
+  const batchId = batchPrompts.length ? beginBatch(batchPrompts.length) : 0
 
-  const taskId = genId()
-  const task: TaskRecord = {
-    id: taskId,
-    prompt: prompt.trim(),
-    params: normalizedParams,
-    apiProvider: activeProfile.provider,
-    apiProfileName: activeProfile.name,
-    apiModel: activeProfile.model,
-    inputImageIds: orderedInputImages.map((i) => i.id),
-    maskTargetImageId,
-    maskImageId,
-    outputImages: [],
-    status: 'running',
-    error: null,
-    createdAt: Date.now(),
-    finishedAt: null,
-    elapsed: null,
+  const startTask = async (taskPrompt: string) => {
+    const taskId = genId()
+    const task: TaskRecord = {
+      id: taskId,
+      ...(batchId ? { batchId } : {}),
+      ...(batchId ? { batchTotal: batchPrompts.length } : {}),
+      prompt: taskPrompt,
+      params: normalizedParams,
+      apiProvider: activeProfile.provider,
+      apiProfileName: activeProfile.name,
+      apiProfileId: activeProfile.id,
+      apiModel: activeProfile.model,
+      inputImageIds: orderedInputImages.map((i) => i.id),
+      maskTargetImageId,
+      maskImageId,
+      markupImageId: orderedInputImages[0]?.markupImageId ?? null,
+      comments: orderedInputImages[0]?.comments ? [...orderedInputImages[0].comments] : undefined,
+      outputImages: [],
+      status: 'running',
+      error: null,
+      createdAt: Date.now(),
+      finishedAt: null,
+      elapsed: null,
+    }
+    useStore.getState().setTasks([task, ...useStore.getState().tasks])
+    await putTask(task)
+    requestSettingsByTaskId.set(taskId, settings)
+    if (batchId) batchTaskIds.add(taskId)
+    void executeTask(taskId)
+    return taskId
   }
-
-  const latestTasks = useStore.getState().tasks
-  useStore.getState().setTasks([task, ...latestTasks])
-  await putTask(task)
 
   if (settings.clearInputAfterSubmit) {
     useStore.getState().setPrompt('')
     useStore.getState().clearInputImages()
   }
 
-  // 异步调用 API
-  executeTask(taskId)
+  if (batchPrompts.length) {
+    const limit = settings.batchPromptMode === 'queue' ? 1 : settings.batchPromptConcurrency
+    void runBatchPrompts(batchId, batchPrompts, limit, startTask)
+  } else {
+    await startTask(prompt.trim())
+  }
+}
+
+let activeBatchId = Date.now()
+
+function beginBatch(total: number) {
+  const id = ++activeBatchId
+  useStore.getState().setBatchProgress({ id, total, started: 0, finished: 0 })
+  return id
+}
+
+function endBatch(id: number) {
+  if (!id || id !== activeBatchId) return
+  activeBatchId += 1
+  useStore.getState().setBatchProgress(null)
+}
+
+function waitForTaskSettled(taskId: string, cancelled: () => boolean): Promise<void> {
+  return new Promise((resolve) => {
+    const settled = (tasks: TaskRecord[]) => cancelled() || tasks.find((task) => task.id === taskId)?.status !== 'running'
+    if (settled(useStore.getState().tasks)) return resolve()
+    const unsubscribe = useStore.subscribe((state) => {
+      if (!settled(state.tasks)) return
+      unsubscribe()
+      resolve()
+    })
+  })
+}
+
+async function runBatchPrompts(id: number, prompts: string[], limit: number, startTask: (prompt: string) => Promise<string>) {
+  const stopped = () => id !== activeBatchId
+  let started = 0
+  let finished = 0
+  let failed = 0
+  await runWithConcurrency(prompts, limit, async (prompt) => {
+    started += 1
+    if (!stopped()) useStore.getState().setBatchProgress({ id, total: prompts.length, started, finished })
+    try {
+      const taskId = await startTask(prompt)
+      await waitForTaskSettled(taskId, stopped)
+      if (useStore.getState().tasks.find((task) => task.id === taskId)?.status === 'error') failed += 1
+    } catch (error) {
+      failed += 1
+      console.error('批量提交失败', error)
+    }
+    finished += 1
+    if (!stopped()) useStore.getState().setBatchProgress({ id, total: prompts.length, started, finished })
+  }, stopped)
+  if (stopped()) return
+  endBatch(id)
+  useStore.getState().showToast(`批量生成完成：成功 ${started - failed} 条，失败 ${failed} 条`, failed ? 'error' : 'success')
+}
+
+export function stopBatchPrompts() {
+  const progress = useStore.getState().batchProgress
+  if (!progress) return
+  endBatch(activeBatchId)
+  useStore.getState().showToast(`已停止提交，已开始的 ${progress.started} 条任务会继续执行`, 'info')
 }
 
 async function executeTask(taskId: string) {
-  const { settings } = useStore.getState()
+  const runEpoch = (taskRunEpochs.get(taskId) ?? 0) + 1
+  taskRunEpochs.set(taskId, runEpoch)
+  const isCurrentRun = () => taskRunEpochs.get(taskId) === runEpoch
+  const settings = requestSettingsByTaskId.get(taskId) ?? useStore.getState().settings
   const task = useStore.getState().tasks.find((t) => t.id === taskId)
   if (!task) return
   const activeProfile = getActiveApiProfile(settings)
@@ -672,14 +829,18 @@ async function executeTask(taskId: string) {
       maskDataUrl = await ensureImageCached(task.maskImageId)
       if (!maskDataUrl) throw new Error('遮罩图片已不存在')
     }
+    const markupDataUrl = task.markupImageId ? await ensureImageCached(task.markupImageId) : undefined
+    if (task.markupImageId && !markupDataUrl) throw new Error('标注图片已不存在')
 
     const result = await callImageApi({
-      settings,
-      prompt: task.prompt,
+      settings: { ...settings, model: task.apiModel ?? settings.model },
+      prompt: appendImageComments(task.prompt, task.comments),
       params: task.params,
       inputImageDataUrls: inputDataUrls,
       maskDataUrl,
+      markupDataUrl,
       onFalRequestEnqueued: (request) => {
+        if (!isCurrentRun()) return
         falRequestInfo = request
         updateTaskInStore(taskId, {
           falRequestId: request.requestId,
@@ -687,10 +848,15 @@ async function executeTask(taskId: string) {
           falRecoverable: false,
         })
       },
+      onPartialImage: (image) => {
+        if (isCurrentRun() && useStore.getState().tasks.find((item) => item.id === taskId)?.status === 'running') {
+          useStore.getState().setStreamPreview(taskId, image)
+        }
+      },
     })
 
     const latestBeforeSuccess = useStore.getState().tasks.find((t) => t.id === taskId)
-    if (!latestBeforeSuccess || latestBeforeSuccess.status !== 'running') return
+    if (!isCurrentRun() || !latestBeforeSuccess || latestBeforeSuccess.status !== 'running') return
 
     // 存储输出图片
     const outputIds: string[] = []
@@ -724,7 +890,7 @@ async function executeTask(taskId: string) {
 
     // 更新任务
     const latestBeforeUpdate = useStore.getState().tasks.find((t) => t.id === taskId)
-    if (!latestBeforeUpdate || latestBeforeUpdate.status !== 'running') return
+    if (!isCurrentRun() || !latestBeforeUpdate || latestBeforeUpdate.status !== 'running') return
     clearOpenAIWatchdogTimer(taskId)
     updateTaskInStore(taskId, {
       outputImages: outputIds,
@@ -737,7 +903,7 @@ async function executeTask(taskId: string) {
       falRecoverable: false,
     })
 
-    useStore.getState().showToast(`生成完成，共 ${outputIds.length} 张图片`, 'success')
+    if (!batchTaskIds.has(taskId)) useStore.getState().showToast(`生成完成，共 ${outputIds.length} 张图片`, 'success')
     const currentMask = useStore.getState().maskDraft
     if (
       maskDataUrl &&
@@ -748,6 +914,7 @@ async function executeTask(taskId: string) {
       useStore.getState().clearMaskDraft()
     }
   } catch (err) {
+    if (!isCurrentRun()) return
     clearOpenAIWatchdogTimer(taskId)
     const latestTask = useStore.getState().tasks.find((t) => t.id === taskId) ?? task
     if (latestTask.status !== 'running') return
@@ -773,9 +940,14 @@ async function executeTask(taskId: string) {
         finishedAt: Date.now(),
         elapsed: Date.now() - task.createdAt,
       })
-      useStore.getState().setDetailTaskId(taskId)
+      if (!batchTaskIds.has(taskId)) useStore.getState().setDetailTaskId(taskId)
     }
   } finally {
+    if (isCurrentRun()) {
+      useStore.getState().setStreamPreview(taskId, null)
+      batchTaskIds.delete(taskId)
+      requestSettingsByTaskId.delete(taskId)
+    }
     // 释放输入图片的内存缓存（已持久化到 IndexedDB，后续按需从 DB 加载）
     for (const imgId of task.inputImageIds) {
       imageCache.delete(imgId)
@@ -793,35 +965,64 @@ export function updateTaskInStore(taskId: string, patch: Partial<TaskRecord>) {
   if (task) putTask(task)
 }
 
-/** 重试失败的任务：创建新任务并执行 */
-export async function retryTask(task: TaskRecord) {
+/** 重试：可新建任务，或原位重试失败/任意已结束任务 */
+export async function retryTask(task: TaskRecord, mode: RetryMode = 'new') {
   const { settings } = useStore.getState()
+  const current = useStore.getState().tasks.find((item) => item.id === task.id)
+  if (!current || current.status === 'running' || current.falRecoverable) return
+  if (mode === 'overwriteFailed' && current.status !== 'error') return
   const activeProfile = getActiveApiProfile(settings)
-  const normalizedParams = normalizeParamsForSettings(task.params, settings)
-  const taskId = genId()
+  const normalizedParams = normalizeParamsForSettings(current.params, settings)
+  const taskId = mode === 'new' ? genId() : current.id
+  const oldOutputIds = mode === 'new' ? [] : current.outputImages
   const newTask: TaskRecord = {
     id: taskId,
-    prompt: task.prompt,
+    ...(mode === 'new' ? {} : { batchId: current.batchId, batchTotal: current.batchTotal }),
+    prompt: current.prompt,
     params: normalizedParams,
     apiProvider: activeProfile.provider,
     apiProfileName: activeProfile.name,
+    apiProfileId: activeProfile.id,
     apiModel: activeProfile.model,
-    inputImageIds: [...task.inputImageIds],
-    maskTargetImageId: task.maskTargetImageId ?? null,
-    maskImageId: task.maskImageId ?? null,
+    inputImageIds: [...current.inputImageIds],
+    maskTargetImageId: current.maskTargetImageId ?? null,
+    maskImageId: current.maskImageId ?? null,
+    markupImageId: current.markupImageId ?? null,
+    comments: current.comments ? [...current.comments] : undefined,
     outputImages: [],
     status: 'running',
     error: null,
-    createdAt: Date.now(),
+    createdAt: mode === 'new' ? Date.now() : current.createdAt,
+    isFavorite: mode === 'new' ? undefined : current.isFavorite,
     finishedAt: null,
     elapsed: null,
   }
 
   const latestTasks = useStore.getState().tasks
-  useStore.getState().setTasks([newTask, ...latestTasks])
+  clearOpenAIWatchdogTimer(taskId)
+  clearFalRecoveryTimer(taskId)
+  if (mode !== 'new') taskRunEpochs.set(taskId, (taskRunEpochs.get(taskId) ?? 0) + 1)
+  useStore.getState().setStreamPreview(taskId, null)
+  useStore.getState().setTasks(mode === 'new' ? [newTask, ...latestTasks] : latestTasks.map((item) => item.id === taskId ? newTask : item))
   await putTask(newTask)
+  requestSettingsByTaskId.set(taskId, settings)
+  for (const imageId of oldOutputIds) {
+    const state = useStore.getState()
+    if (state.inputImages.some((image) => image.id === imageId)) continue
+    if (state.tasks.some((item) => item.inputImageIds.includes(imageId) || item.maskImageId === imageId || item.markupImageId === imageId || item.outputImages.includes(imageId))) continue
+    await deleteImage(imageId)
+    imageCache.delete(imageId)
+  }
+  void executeTask(taskId)
+  return taskId
+}
 
-  executeTask(taskId)
+/** 批量重试时限制同时运行的请求数，避免一次触发过多生成。 */
+export async function retryTasks(tasks: TaskRecord[], mode: RetryMode, limit = 2) {
+  await runWithConcurrency(tasks, limit, async (task) => {
+    const taskId = await retryTask(task, mode)
+    if (taskId) await waitForTaskSettled(taskId, () => false)
+  }, () => false)
 }
 
 /** 复用配置 */
@@ -835,7 +1036,7 @@ export async function reuseConfig(task: TaskRecord) {
   for (const imgId of task.inputImageIds) {
     const dataUrl = await ensureImageCached(imgId)
     if (dataUrl) {
-      imgs.push({ id: imgId, dataUrl })
+      imgs.push({ id: imgId, dataUrl, ...(imgId === task.inputImageIds[0] ? { markupImageId: task.markupImageId ?? undefined, comments: task.comments } : {}) })
     }
   }
   setInputImages(imgs)
@@ -889,6 +1090,7 @@ export async function removeMultipleTasks(taskIds: string[]) {
     if (toDelete.has(t.id)) {
       for (const id of t.inputImageIds || []) deletedImageIds.add(id)
       if (t.maskImageId) deletedImageIds.add(t.maskImageId)
+      if (t.markupImageId) deletedImageIds.add(t.markupImageId)
       for (const id of t.outputImages || []) deletedImageIds.add(id)
     }
   }
@@ -903,9 +1105,11 @@ export async function removeMultipleTasks(taskIds: string[]) {
   for (const t of remaining) {
     for (const id of t.inputImageIds || []) stillUsed.add(id)
     if (t.maskImageId) stillUsed.add(t.maskImageId)
+    if (t.markupImageId) stillUsed.add(t.markupImageId)
     for (const id of t.outputImages || []) stillUsed.add(id)
   }
   for (const img of inputImages) stillUsed.add(img.id)
+  for (const img of inputImages) if (img.markupImageId) stillUsed.add(img.markupImageId)
 
   // 删除孤立图片
   for (const imgId of deletedImageIds) {
@@ -932,6 +1136,7 @@ export async function removeTask(task: TaskRecord) {
   const taskImageIds = new Set([
     ...(task.inputImageIds || []),
     ...(task.maskImageId ? [task.maskImageId] : []),
+    ...(task.markupImageId ? [task.markupImageId] : []),
     ...(task.outputImages || []),
   ])
 
@@ -945,9 +1150,11 @@ export async function removeTask(task: TaskRecord) {
   for (const t of remaining) {
     for (const id of t.inputImageIds || []) stillUsed.add(id)
     if (t.maskImageId) stillUsed.add(t.maskImageId)
+    if (t.markupImageId) stillUsed.add(t.markupImageId)
     for (const id of t.outputImages || []) stillUsed.add(id)
   }
   for (const img of inputImages) stillUsed.add(img.id)
+  for (const img of inputImages) if (img.markupImageId) stillUsed.add(img.markupImageId)
 
   // 删除孤立图片
   for (const imgId of taskImageIds) {
@@ -962,6 +1169,13 @@ export async function removeTask(task: TaskRecord) {
 
 /** 清空所有数据（含配置重置） */
 export async function clearAllData() {
+  activeBatchId += 1
+  useStore.getState().setBatchProgress(null)
+  taskRunEpochs.clear()
+  requestSettingsByTaskId.clear()
+  batchTaskIds.clear()
+  for (const taskId of openAIWatchdogTimers.keys()) clearOpenAIWatchdogTimer(taskId)
+  for (const taskId of falRecoveryTimers.keys()) clearFalRecoveryTimer(taskId)
   await dbClearTasks()
   await clearImages()
   imageCache.clear()
@@ -977,8 +1191,8 @@ export async function clearAllData() {
 
 /** 从 dataUrl 解析出 MIME 扩展名和二进制数据 */
 function dataUrlToBytes(dataUrl: string): { ext: string; bytes: Uint8Array } {
-  const match = dataUrl.match(/^data:image\/(\w+);base64,/)
-  const ext = match?.[1] ?? 'png'
+  const match = dataUrl.match(/^data:image\/([^;]+);base64,/)
+  const ext = match?.[1] === 'svg+xml' ? 'svg' : match?.[1] ?? 'png'
   const b64 = dataUrl.replace(/^data:[^;]+;base64,/, '')
   const binary = atob(b64)
   const bytes = new Uint8Array(binary.length)
@@ -989,7 +1203,7 @@ function dataUrlToBytes(dataUrl: string): { ext: string; bytes: Uint8Array } {
 /** 将二进制数据还原为 dataUrl */
 function bytesToDataUrl(bytes: Uint8Array, filePath: string): string {
   const ext = filePath.split('.').pop()?.toLowerCase() ?? 'png'
-  const mimeMap: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' }
+  const mimeMap: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', svg: 'image/svg+xml', gif: 'image/gif' }
   const mime = mimeMap[ext] ?? 'image/png'
   let binary = ''
   for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
@@ -1009,6 +1223,7 @@ export async function exportData() {
       for (const id of [
         ...(task.inputImageIds || []),
         ...(task.maskImageId ? [task.maskImageId] : []),
+        ...(task.markupImageId ? [task.markupImageId] : []),
         ...(task.outputImages || []),
       ]) {
         const prev = imageCreatedAtFallback.get(id)

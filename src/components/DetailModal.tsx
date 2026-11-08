@@ -6,6 +6,7 @@ import { ActualValueBadge, DetailParamValue } from '../lib/paramDisplay'
 import { MobileSafeImage } from './MobileSafeImage'
 import { copyBlobToClipboard, copyTextToClipboard, getClipboardFailureMessage } from '../lib/clipboard'
 import { createMaskPreviewDataUrl } from '../lib/canvasImage'
+import type { RetryMode } from '../types'
 
 export default function DetailModal() {
   const tasks = useStore((s) => s.tasks)
@@ -24,6 +25,7 @@ export default function DetailModal() {
   const [imageSizes, setImageSizes] = useState<Record<string, string>>({})
   const [maskPreviewSrc, setMaskPreviewSrc] = useState('')
   const [now, setNow] = useState(Date.now())
+  const [retryMode, setRetryMode] = useState<RetryMode>('new')
   const imagePanelRef = useRef<HTMLDivElement>(null)
   const mainImageRef = useRef<HTMLImageElement>(null)
   const [imageLabelLeft, setImageLabelLeft] = useState(8)
@@ -32,12 +34,14 @@ export default function DetailModal() {
     () => tasks.find((t) => t.id === detailTaskId) ?? null,
     [tasks, detailTaskId],
   )
+  const streamPreview = useStore((s) => detailTaskId ? s.streamPreviews[detailTaskId] : undefined)
 
   useCloseOnEscape(Boolean(task), () => setDetailTaskId(null))
 
   // Reset index when task changes
   useEffect(() => {
     setImageIndex(0)
+    setRetryMode('new')
   }, [detailTaskId])
 
   useEffect(() => {
@@ -264,7 +268,8 @@ export default function DetailModal() {
   }
 
   const handleRetry = () => {
-    retryTask(task)
+    if (!task) return
+    void retryTask(task, retryMode)
     setDetailTaskId(null)
   }
 
@@ -304,6 +309,7 @@ export default function DetailModal() {
 
         {/* 左侧：图片 */}
         <div ref={imagePanelRef} className="md:w-1/2 w-full h-64 md:h-auto bg-gray-100 dark:bg-black/20 relative flex items-center justify-center flex-shrink-0 min-h-[16rem]">
+          {task.status === 'running' && streamPreview && <MobileSafeImage src={streamPreview} className="absolute inset-0 h-full w-full object-contain opacity-80" alt="流式预览" />}
           {task.status === 'done' && outputLen > 0 && currentOutputImageSrc && (
             <>
               <MobileSafeImage
@@ -616,6 +622,14 @@ export default function DetailModal() {
           )}
 
           {/* 操作按钮 */}
+          {task.status !== 'running' && !task.falRecoverable && <div className="mb-2 flex items-center gap-2 text-xs">
+            <select aria-label="重试方式" value={retryMode} onChange={(e) => setRetryMode(e.target.value as RetryMode)} className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-transparent px-2 py-2 dark:border-white/10">
+              <option value="new">新建一条任务</option>
+              {task.status === 'error' && <option value="overwriteFailed">覆盖失败任务</option>}
+              <option value="overwriteAll">覆盖当前任务</option>
+            </select>
+            <button onClick={handleRetry} className="rounded-lg bg-blue-50 px-3 py-2 font-medium text-blue-600 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-400">重试</button>
+          </div>}
           <div className="grid grid-cols-4 sm:flex gap-2 pt-4 border-t border-gray-100 dark:border-white/[0.08]">
             <button
               onClick={handleReuse}

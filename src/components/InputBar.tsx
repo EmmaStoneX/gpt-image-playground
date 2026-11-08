@@ -1,15 +1,17 @@
 import { useRef, useEffect, useCallback, useState, useMemo, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { useStore, submitTask, addImageFromFile, updateTaskInStore, removeMultipleTasks } from '../store'
+import { useStore, submitTask, stopBatchPrompts, addImageFromFile, getCachedImage, updateTaskInStore, removeMultipleTasks } from '../store'
 import { DEFAULT_PARAMS } from '../types'
-import { getActiveApiProfile } from '../lib/apiProfiles'
-import { DEFAULT_FAL_IMAGE_SIZE, getChangedParams, getOutputImageLimitForSettings, normalizeParamsForSettings } from '../lib/paramCompatibility'
+import { getActiveApiProfile, splitModelList } from '../lib/apiProfiles'
+import { DEFAULT_FAL_IMAGE_SIZE, getChangedParams, getOutputImageLimitForSettings, getParamDisabledReasons, normalizeParamsForSettings } from '../lib/paramCompatibility'
 import { normalizeImageSize } from '../lib/size'
 import { createMaskPreviewDataUrl } from '../lib/canvasImage'
+import { splitBatchPrompts } from '../lib/batchPrompts'
 import Select from './Select'
 import SizePickerModal from './SizePickerModal'
 import { MobileSafeImage } from './MobileSafeImage'
 import ViewportTooltip from './ViewportTooltip'
+import SketchBoardModal from './SketchBoardModal'
 
 /** 通用悬浮气泡提示 */
 function ButtonTooltip({ visible, text }: { visible: boolean; text: ReactNode }) {
@@ -33,7 +35,7 @@ function useIsMobile() {
   return isMobile
 }
 
-export default function InputBar() {
+export default function InputBar({ hideBatchProgress = false }: { hideBatchProgress?: boolean }) {
   const prompt = useStore((s) => s.prompt)
   const setPrompt = useStore((s) => s.setPrompt)
   const inputImages = useStore((s) => s.inputImages)
@@ -42,6 +44,8 @@ export default function InputBar() {
   const params = useStore((s) => s.params)
   const setParams = useStore((s) => s.setParams)
   const settings = useStore((s) => s.settings)
+  const setSettings = useStore((s) => s.setSettings)
+  const batchProgress = useStore((s) => s.batchProgress)
   const setShowSettings = useStore((s) => s.setShowSettings)
   const setLightboxImageId = useStore((s) => s.setLightboxImageId)
   const showToast = useStore((s) => s.showToast)
@@ -128,6 +132,7 @@ export default function InputBar() {
   const [mobileCollapsed, setMobileCollapsed] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showSizePicker, setShowSizePicker] = useState(false)
+  const [sketchImageId, setSketchImageId] = useState<string | null>(null)
   const [maskPreviewUrl, setMaskPreviewUrl] = useState('')
   const [imageDragIndex, setImageDragIndex] = useState<number | null>(null)
   const [imageDragOverIndex, setImageDragOverIndex] = useState<number | null>(null)
@@ -155,12 +160,15 @@ export default function InputBar() {
   const dragCounter = useRef(0)
   const isMobile = useIsMobile()
 
-  const canSubmit = prompt.trim() && settings.apiKey
+  const batchPromptCount = settings.batchPromptEnabled ? splitBatchPrompts(prompt).length : 0
+  const canSubmit = prompt.trim() && settings.apiKey && !batchProgress && (!settings.batchPromptEnabled || batchPromptCount >= 2)
   const activeProfile = getActiveApiProfile(settings)
+  const modelOptions = splitModelList(settings.profiles.find((profile) => profile.id === settings.activeProfileId)?.model ?? activeProfile.model)
   const activeProvider = activeProfile.provider
   const isFalProvider = activeProvider === 'fal'
+  const paramDisabled = getParamDisabledReasons(settings)
   const moderationDisabled = settings.apiMode === 'responses' || isFalProvider
-  const compressionDisabled = params.output_format === 'png' || isFalProvider
+  const compressionDisabled = params.output_format === 'png' || params.output_format === 'svg' || params.output_format === 'gif' || isFalProvider
   const outputImageLimit = getOutputImageLimitForSettings(settings)
   const nLimitHintText = isFalProvider
     ? `fal.ai 最大请求数量为 ${outputImageLimit}`
@@ -173,14 +181,18 @@ export default function InputBar() {
         { label: 'low', value: 'low' },
         { label: 'medium', value: 'medium' },
         { label: 'high', value: 'high' },
+        { label: 'xhigh', value: 'xhigh', disabledReason: paramDisabled.extendedQuality },
+        { label: 'max', value: 'max', disabledReason: paramDisabled.extendedQuality },
       ]
     : [
         { label: 'auto', value: 'auto' },
         { label: 'low', value: 'low' },
         { label: 'medium', value: 'medium' },
         { label: 'high', value: 'high' },
+        { label: 'xhigh', value: 'xhigh', disabledReason: paramDisabled.extendedQuality },
+        { label: 'max', value: 'max', disabledReason: paramDisabled.extendedQuality },
       ]
-  const qualityLabelMap: Record<string, string> = { auto: '自动', low: '低质量', medium: '中质量', high: '高质量' }
+  const qualityLabelMap: Record<string, string> = { auto: '自动', low: '低质量', medium: '中质量', high: '高质量', xhigh: '超高质量', max: '最高质量' }
   const effectiveQuality = settings.codexCli
     ? 'auto'
     : isFalProvider && params.quality === 'auto'
@@ -858,6 +870,7 @@ export default function InputBar() {
               alt=""
             />
           )}
+          {img.markupImageId && getCachedImage(img.markupImageId) && <MobileSafeImage src={getCachedImage(img.markupImageId)!} className="pointer-events-none absolute inset-0 h-full w-full object-cover" alt="" />}
           {isMaskTarget && (
             <span className="absolute left-1 top-1 rounded bg-blue-500/90 px-1.5 py-0.5 text-[8px] leading-none text-white font-bold tracking-wider backdrop-blur-sm z-10 pointer-events-none">
               MASK
@@ -878,6 +891,8 @@ export default function InputBar() {
             </button>
           )}
         </div>
+        {idx === 0 && <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); setSketchImageId(img.id) }} className="absolute -bottom-2 -right-1 z-30 rounded-full bg-[#0d99ff] px-1.5 py-0.5 text-[9px] font-bold text-white shadow hover:bg-[#0a83dc]" title="打开画板与评论标注" aria-label="打开画板与评论标注">画板</button>}
+        {Boolean(img.comments?.length) && <span className="pointer-events-none absolute -bottom-2 left-0 z-20 rounded bg-blue-500 px-1 text-[9px] text-white">{img.comments?.length} 条评论</span>}
         {!isMaskTarget && (
           <span
             className="absolute -top-2 -right-2 w-[22px] h-[22px] rounded-full bg-red-500 text-white flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-red-600 z-30"
@@ -996,6 +1011,8 @@ export default function InputBar() {
             { label: 'PNG', value: 'png' },
             { label: 'JPEG', value: 'jpeg' },
             { label: 'WebP', value: 'webp' },
+            { label: 'SVG', value: 'svg', disabledReason: inputImages.length > 0 ? 'SVG 只能用于文生图' : paramDisabled.svg },
+            { label: 'GIF', value: 'gif', disabledReason: paramDisabled.gif },
           ]}
           className={selectClass}
         />
@@ -1203,6 +1220,43 @@ export default function InputBar() {
             <div className={`w-10 h-1 rounded-full bg-gray-300 dark:bg-white/[0.06] transition-transform duration-200 ${mobileCollapsed ? 'scale-x-75' : ''}`} />
           </div>
 
+          <div className="flex flex-wrap items-center gap-2 px-1 pb-2 text-xs text-gray-500 dark:text-gray-400">
+            <label className="flex min-w-0 items-center gap-1.5">模型
+              <span className="relative block min-w-0">
+                <select
+                  aria-label="生成模型"
+                  value={activeProfile.model}
+                  onChange={(event) => setSettings({ profiles: settings.profiles.map((profile) => profile.id === activeProfile.id ? { ...profile, selectedModel: event.target.value } : profile) })}
+                  disabled={Boolean(batchProgress)}
+                  title={modelOptions.length === 1 ? '在设置的 API 与供应商中用逗号添加更多模型' : undefined}
+                  className="h-7 w-40 appearance-none rounded-lg border border-[#e4e4ec] bg-[#f6f6f9] pl-2.5 pr-7 text-xs font-medium text-[#18181b] outline-none focus:border-[#0d99ff] disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-100 sm:w-52"
+                >
+                  {modelOptions.map((model) => <option key={model} value={model}>{model}</option>)}
+                </select>
+                <svg className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#71717a]" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+              </span>
+            </label>
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" checked={settings.batchPromptEnabled} onChange={(e) => setSettings({ batchPromptEnabled: e.target.checked })} disabled={Boolean(batchProgress)} />
+              批量提示词
+            </label>
+            {settings.batchPromptEnabled && (
+              <>
+                <span>{batchPromptCount} 条 · 两个空行分隔</span>
+                <select aria-label="批量方式" value={settings.batchPromptMode} onChange={(e) => setSettings({ batchPromptMode: e.target.value as 'queue' | 'concurrent' })} disabled={Boolean(batchProgress)} className="rounded border border-gray-200 bg-transparent px-1 py-0.5 dark:border-white/10">
+                  <option value="queue">排队</option><option value="concurrent">并发</option>
+                </select>
+                {settings.batchPromptMode === 'concurrent' && (
+                  <label className="flex items-center gap-1">并发数
+                    <input type="number" min={1} max={20} value={settings.batchPromptConcurrency} onChange={(e) => setSettings({ batchPromptConcurrency: Math.min(20, Math.max(1, Number(e.target.value) || 1)) })} disabled={Boolean(batchProgress)} className="w-12 rounded border border-gray-200 bg-transparent px-1 py-0.5 dark:border-white/10" />
+                  </label>
+                )}
+              </>
+            )}
+            {batchProgress && !hideBatchProgress && <span role="status">已提交 {batchProgress.started}/{batchProgress.total} · 已结束 {batchProgress.finished}</span>}
+            {batchProgress && !hideBatchProgress && <button type="button" onClick={stopBatchPrompts} className="text-red-500 hover:underline">停止后续提交</button>}
+          </div>
+
           {/* 输入图片行（移动端可折叠） */}
           {inputImages.length > 0 && (
             isMobile ? (
@@ -1227,6 +1281,15 @@ export default function InputBar() {
           <div className={`collapse-section${showAdvanced ? '' : ' collapsed'}`}>
             <div className="collapse-inner px-1 pt-1">
               {renderParams('grid-cols-2 sm:grid-cols-6')}
+              <div className="mt-2 flex flex-wrap items-end gap-2 text-xs">
+                {!paramDisabled.complexity && <label className="flex flex-col gap-0.5"><span className="text-gray-400">复杂度</span>
+                  <Select value={params.complexity} onChange={(value) => setParams({ complexity: value as typeof params.complexity })} options={[{ label: '自动', value: 'auto' }, { label: '低', value: 'low' }, { label: '中', value: 'medium' }, { label: '高', value: 'high' }]} className="h-[34px] min-w-28 rounded-xl border border-[#e4e4ec] bg-white px-3 text-xs text-[#18181b] dark:border-white/10 dark:bg-gray-900 dark:text-gray-100" />
+                </label>}
+                {params.output_format === 'gif' && <>
+                  <label className="flex flex-col gap-0.5"><span className="text-gray-400">帧数</span><input type="number" min={2} max={16} value={params.frame_count} onChange={(e) => setParams({ frame_count: Number(e.target.value) })} className="w-20 rounded-xl border border-gray-200 bg-transparent px-3 py-1.5 dark:border-white/10" /></label>
+                  <label className="flex flex-col gap-0.5"><span className="text-gray-400">帧间隔 ms</span><input type="number" min={20} max={2000} value={params.frame_duration_ms} onChange={(e) => setParams({ frame_duration_ms: Number(e.target.value) })} className="w-28 rounded-xl border border-gray-200 bg-transparent px-3 py-1.5 dark:border-white/10" /></label>
+                </>}
+              </div>
               <div className="h-2" />
             </div>
           </div>
@@ -1262,7 +1325,7 @@ export default function InputBar() {
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={handleKeyDown}
               rows={1}
-              placeholder={isMobile ? '描述你想生成的图像…' : '描述你想生成的图像，或粘贴 / 拖入参考图…'}
+              placeholder={settings.batchPromptEnabled ? '输入多条提示词，用两个空行分隔…' : isMobile ? '描述你想生成的图像…' : '描述你想生成的图像，或粘贴 / 拖入参考图…'}
               className="flex-1 min-w-0 bg-transparent border-0 px-1.5 py-2.5 text-sm leading-relaxed resize-none focus:outline-none placeholder:text-gray-400 dark:placeholder:text-gray-500"
             />
 
@@ -1314,12 +1377,12 @@ export default function InputBar() {
                     ? 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer'
                     : 'bg-blue-500 text-white hover:bg-blue-600 disabled:bg-gray-200 dark:disabled:bg-white/[0.06] disabled:text-gray-400 dark:disabled:text-gray-500 disabled:cursor-not-allowed'
                 }`}
-                title={settings.apiKey ? (maskDraft ? '遮罩编辑 (Ctrl+Enter)' : '生成 (Ctrl+Enter)') : '请先配置 API'}
+                title={settings.apiKey ? (maskDraft ? '遮罩编辑 (Ctrl+Enter)' : settings.batchPromptEnabled ? '批量生成 (Ctrl+Enter)' : '生成 (Ctrl+Enter)') : '请先配置 API'}
               >
                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
                   <path d="M12 19V5M5 12l7-7 7 7" />
                 </svg>
-                <span className="hidden sm:inline">{maskDraft ? '遮罩编辑' : '生成'}</span>
+                <span className="hidden sm:inline">{maskDraft ? '遮罩编辑' : settings.batchPromptEnabled ? `批量生成 ${batchPromptCount} 条` : '生成'}</span>
               </button>
             </div>
           </div>
@@ -1334,6 +1397,7 @@ export default function InputBar() {
           />
         </div>
       </div>
+      {sketchImageId && inputImages.find((image) => image.id === sketchImageId) && <SketchBoardModal key={sketchImageId} image={inputImages.find((image) => image.id === sketchImageId)!} onClose={() => setSketchImageId(null)} />}
     </>
   )
 }

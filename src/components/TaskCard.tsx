@@ -7,6 +7,7 @@ import { MobileSafeImage } from './MobileSafeImage'
 
 interface Props {
   task: TaskRecord
+  workspace?: boolean
   onReuse: () => void
   onEditOutputs: () => void
   onDelete: () => void
@@ -16,6 +17,7 @@ interface Props {
 
 export default function TaskCard({
   task,
+  workspace = false,
   onReuse,
   onEditOutputs,
   onDelete,
@@ -31,6 +33,7 @@ export default function TaskCard({
   const [swipeStartedSelected, setSwipeStartedSelected] = useState(false)
   const [swipeActionActive, setSwipeActionActive] = useState(false)
   const toggleTaskSelection = useStore((s) => s.toggleTaskSelection)
+  const streamPreview = useStore((s) => s.streamPreviews[task.id])
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
   const swipeResetTimerRef = useRef<number | null>(null)
   const suppressClickUntilRef = useRef(0)
@@ -211,7 +214,7 @@ export default function TaskCard({
         }`}
         style={{
           transform: swipeOffset ? `translateX(${swipeOffset}px)` : undefined,
-          aspectRatio,
+          aspectRatio: workspace ? '16 / 9' : aspectRatio,
         }}
         onClick={(e) => {
           if (Date.now() < suppressClickUntilRef.current) {
@@ -235,6 +238,9 @@ export default function TaskCard({
             alt=""
           />
         )}
+        {task.status === 'running' && streamPreview && (
+          <MobileSafeImage src={streamPreview} className="absolute inset-0 h-full w-full object-cover opacity-75" alt="流式预览" />
+        )}
         {task.status === 'done' && !thumbSrc && (
           <div className="absolute inset-0 flex items-center justify-center">
             <svg className="w-9 h-9 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -243,12 +249,12 @@ export default function TaskCard({
           </div>
         )}
         {task.status === 'running' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+          <div className={`absolute inset-0 flex flex-col items-center justify-center gap-2 ${streamPreview ? 'bg-black/20 text-white' : ''}`}>
             <svg className="w-8 h-8 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            <span className="text-xs text-gray-400 dark:text-gray-500">生成中…</span>
+            <span className={`text-xs ${streamPreview ? 'text-white' : 'text-gray-400 dark:text-gray-500'}`}>{streamPreview ? '预览生成中…' : '生成中…'}</span>
           </div>
         )}
         {task.status === 'error' && isFalReconnecting && (
@@ -257,6 +263,13 @@ export default function TaskCard({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
             <span className="text-xs text-yellow-500 text-center leading-tight">重连中</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete() }}
+              className="rounded-lg border border-red-300 px-2.5 py-1 text-xs font-medium text-red-500 hover:bg-red-50 dark:border-red-500/40 dark:hover:bg-red-500/10"
+              aria-label="删除重连中的任务"
+            >
+              删除
+            </button>
           </div>
         )}
         {task.status === 'error' && !isFalReconnecting && (
@@ -265,15 +278,28 @@ export default function TaskCard({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <span className="text-xs text-red-400 text-center leading-tight">生成失败</span>
+            <div className="mt-1 flex items-center gap-2">
             <button
-              onClick={(e) => { e.stopPropagation(); retryTask(task) }}
-              className="mt-1 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-500 text-white text-xs font-medium hover:bg-blue-600 transition"
+              onClick={(e) => { e.stopPropagation(); void retryTask(task) }}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-500 text-white text-xs font-medium hover:bg-blue-600 transition"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
               重试
             </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete() }}
+              className="inline-flex items-center gap-1 rounded-lg border border-red-300 px-2.5 py-1 text-xs font-medium text-red-500 hover:bg-red-50 dark:border-red-500/40 dark:hover:bg-red-500/10 transition"
+              aria-label="删除失败任务"
+              title="删除失败任务"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m5 4v7m4-7v7" />
+              </svg>
+              删除
+            </button>
+            </div>
           </div>
         )}
 
@@ -291,7 +317,7 @@ export default function TaskCard({
               <span className="bg-black/50 text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm font-mono">
                 {coverRatio}
               </span>
-              <span className="bg-black/50 text-white/90 text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm font-medium">
+              <span className="hidden sm:inline bg-black/50 text-white/90 text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm font-medium">
                 {coverSize}
               </span>
             </>

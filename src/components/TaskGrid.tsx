@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, useEffect } from 'react'
 import { useStore, reuseConfig, editOutputs, removeTask } from '../store'
 import TaskCard from './TaskCard'
 
-export default function TaskGrid() {
+export default function TaskGrid({ taskIds, workspace = false, waitingCount = 0, waitingStart = 0 }: { taskIds?: string[]; workspace?: boolean; waitingCount?: number; waitingStart?: number }) {
   const tasks = useStore((s) => s.tasks)
   const searchQuery = useStore((s) => s.searchQuery)
   const filterStatus = useStore((s) => s.filterStatus)
@@ -26,6 +26,10 @@ export default function TaskGrid() {
 
   const filteredTasks = useMemo(() => {
     const sorted = [...tasks].sort((a, b) => b.createdAt - a.createdAt)
+    if (taskIds) {
+      const ids = new Set(taskIds)
+      return sorted.filter((task) => ids.has(task.id))
+    }
     const q = searchQuery.trim().toLowerCase()
     
     return sorted.filter((t) => {
@@ -38,7 +42,7 @@ export default function TaskGrid() {
       const paramStr = JSON.stringify(t.params).toLowerCase()
       return prompt.includes(q) || paramStr.includes(q)
     })
-  }, [tasks, searchQuery, filterStatus, filterFavorite])
+  }, [tasks, taskIds, searchQuery, filterStatus, filterFavorite])
 
   const handleDelete = (task: typeof tasks[0]) => {
     setConfirmDialog({
@@ -165,10 +169,10 @@ export default function TaskGrid() {
     }
   }, [clearSelection, isMac])
 
-  if (!filteredTasks.length) {
+  if (!filteredTasks.length && !workspace) {
     return (
       <div className="text-center py-20 text-gray-400 dark:text-gray-500">
-        {searchQuery || filterFavorite ? (
+        {!taskIds && (searchQuery || filterFavorite) ? (
           <p className="text-sm">没有找到匹配的记录</p>
         ) : (
           <>
@@ -196,13 +200,14 @@ export default function TaskGrid() {
     <div 
       ref={rootRef}
       data-task-grid-root
-      className="relative min-h-[50vh]"
+      className={workspace ? 'relative' : 'relative min-h-[50vh]'}
     >
-      <div ref={gridRef} className="columns-2 lg:columns-3 xl:columns-4 gap-3 sm:gap-4 pb-10">
+      <div ref={gridRef} className={workspace ? 'grid grid-cols-1 gap-5 pb-10 sm:grid-cols-2 xl:grid-cols-3' : 'columns-2 gap-3 pb-10 sm:gap-4 lg:columns-3 xl:columns-4'}>
         {filteredTasks.map((task) => (
-          <div key={task.id} className="task-card-wrapper break-inside-avoid mb-3 sm:mb-4" data-task-id={task.id}>
+          <div key={task.id} className={workspace ? 'task-card-wrapper min-w-0 overflow-hidden rounded-xl border border-[#e4e4ec] bg-white p-2 shadow-sm dark:border-white/10 dark:bg-gray-900' : 'task-card-wrapper mb-3 break-inside-avoid sm:mb-4'} data-task-id={task.id}>
             <TaskCard
               task={task}
+              workspace={workspace}
               onClick={(e) => {
                 if (Date.now() < suppressClickUntil.current) {
                   e.preventDefault()
@@ -224,8 +229,18 @@ export default function TaskGrid() {
               onDelete={() => handleDelete(task)}
               isSelected={selectedTaskIds.includes(task.id)}
             />
+            {workspace && <div className="flex min-h-12 items-center justify-between gap-3 px-2 text-[13px]">
+              <span className="min-w-0 truncate font-medium text-[#18181b] dark:text-gray-100" title={task.prompt}>{task.prompt || '未命名任务'}</span>
+              <span className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-medium ${task.status === 'done' ? 'bg-[#eaf6ff] text-[#087bc0]' : task.status === 'running' ? 'bg-[#eaf6ff] text-[#0d99ff]' : 'bg-[#fff0f0] text-[#ef4444]'}`}>
+                {task.status === 'done' ? '已完成' : task.status === 'running' ? '生成中' : task.falRecoverable ? '恢复中' : '生成失败'}
+              </span>
+            </div>}
           </div>
         ))}
+        {workspace && Array.from({ length: waitingCount }, (_, index) => <div key={`waiting-${index}`} className="min-w-0 rounded-xl border border-[#e4e4ec] bg-white p-2 dark:border-white/10 dark:bg-gray-900">
+          <div className="flex aspect-video items-center justify-center rounded-lg bg-[#f6f6f9] text-sm text-[#9696a0] dark:bg-white/[0.04]">等待提交</div>
+          <div className="px-2 py-3 text-[13px] text-[#5b5b66] dark:text-gray-400">待提交任务 {waitingStart + index + 1}</div>
+        </div>)}
       </div>
       {selectionBox && (
         <div

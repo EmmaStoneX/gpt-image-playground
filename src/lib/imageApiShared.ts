@@ -1,9 +1,20 @@
-import type { AppSettings, TaskParams } from '../types'
+import type { ApiProfile, AppSettings, TaskParams } from '../types'
 
 export const MIME_MAP: Record<string, string> = {
   png: 'image/png',
   jpeg: 'image/jpeg',
   webp: 'image/webp',
+  svg: 'image/svg+xml',
+  gif: 'image/gif',
+}
+
+export function applyGptImage26Params(target: Record<string, unknown>, params: TaskParams, profile: ApiProfile) {
+  if (params.complexity !== 'auto') target.complexity = params.complexity
+  if (params.output_format === 'svg') target.svg = { model: profile.svgModel?.trim() || 'gpt-6.1-sol' }
+  if (params.output_format === 'gif') {
+    target.frame_count = params.frame_count
+    target.frame_duration_ms = params.frame_duration_ms
+  }
 }
 
 export const MAX_MASK_EDIT_FILE_BYTES = 50 * 1024 * 1024
@@ -16,7 +27,9 @@ export interface CallApiOptions {
   /** 输入图片的 data URL 列表 */
   inputImageDataUrls: string[]
   maskDataUrl?: string
+  markupDataUrl?: string
   onFalRequestEnqueued?: (request: { requestId: string; endpoint: string }) => void
+  onPartialImage?: (dataUrl: string) => void
 }
 
 export interface CallApiResult {
@@ -133,7 +146,7 @@ export function pickActualParams(source: unknown): Partial<TaskParams> {
   if (record.quality === 'auto' || record.quality === 'low' || record.quality === 'medium' || record.quality === 'high') {
     actualParams.quality = record.quality
   }
-  if (record.output_format === 'png' || record.output_format === 'jpeg' || record.output_format === 'webp') {
+  if (record.output_format === 'png' || record.output_format === 'jpeg' || record.output_format === 'webp' || record.output_format === 'svg' || record.output_format === 'gif') {
     actualParams.output_format = record.output_format
   }
   if (typeof record.output_compression === 'number') actualParams.output_compression = record.output_compression

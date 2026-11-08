@@ -10,6 +10,11 @@ export interface ApiProfile {
   baseUrl: string
   apiKey: string
   model: string
+  selectedModel?: string
+  imageGenerationModel?: string
+  svgModel?: string
+  streamImages?: boolean
+  streamPartialImages?: number
   timeout: number
   apiMode: ApiMode
   codexCli: boolean
@@ -26,6 +31,9 @@ export interface AppSettings {
   codexCli: boolean
   apiProxy: boolean
   clearInputAfterSubmit: boolean
+  batchPromptEnabled: boolean
+  batchPromptMode: 'queue' | 'concurrent'
+  batchPromptConcurrency: number
   profiles: ApiProfile[]
   activeProfileId: string
 }
@@ -34,8 +42,11 @@ export interface AppSettings {
 
 export interface TaskParams {
   size: string
-  quality: 'auto' | 'low' | 'medium' | 'high'
-  output_format: 'png' | 'jpeg' | 'webp'
+  quality: 'auto' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+  complexity: 'auto' | 'low' | 'medium' | 'high'
+  output_format: 'png' | 'jpeg' | 'webp' | 'svg' | 'gif'
+  frame_count: number
+  frame_duration_ms: number
   output_compression: number | null
   moderation: 'auto' | 'low'
   n: number
@@ -44,7 +55,10 @@ export interface TaskParams {
 export const DEFAULT_PARAMS: TaskParams = {
   size: 'auto',
   quality: 'auto',
+  complexity: 'auto',
   output_format: 'png',
+  frame_count: 9,
+  frame_duration_ms: 200,
   output_compression: null,
   moderation: 'auto',
   n: 1,
@@ -57,6 +71,15 @@ export interface InputImage {
   id: string
   /** data URL，用于预览 */
   dataUrl: string
+  markupImageId?: string
+  comments?: ImageComment[]
+}
+
+export interface ImageComment {
+  id: string
+  x: number
+  y: number
+  text: string
 }
 
 export interface MaskDraft {
@@ -68,15 +91,20 @@ export interface MaskDraft {
 // ===== 任务记录 =====
 
 export type TaskStatus = 'running' | 'done' | 'error'
+export type RetryMode = 'new' | 'overwriteFailed' | 'overwriteAll'
 
 export interface TaskRecord {
   id: string
+  /** 同一次批量提交的标识；旧记录没有此字段 */
+  batchId?: number
+  batchTotal?: number
   prompt: string
   params: TaskParams
   /** 生成时使用的 Provider 类型 */
   apiProvider?: ApiProvider
   /** 生成时使用的 Provider 名称 */
   apiProfileName?: string
+  apiProfileId?: string
   /** 生成时使用的模型 ID */
   apiModel?: string
   /** fal.ai 队列请求 ID，用于连接断开后的结果恢复 */
@@ -95,6 +123,8 @@ export interface TaskRecord {
   inputImageIds: string[]
   maskTargetImageId?: string | null
   maskImageId?: string | null
+  markupImageId?: string | null
+  comments?: ImageComment[]
   /** 输出图片的 image store id 列表 */
   outputImages: string[]
   status: TaskStatus

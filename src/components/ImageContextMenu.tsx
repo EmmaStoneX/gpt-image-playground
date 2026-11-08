@@ -93,7 +93,7 @@ export default function ImageContextMenu() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      const ext = blob.type.split('/')[1] || 'png'
+      const ext = blob.type === 'image/svg+xml' ? 'svg' : blob.type.split('/')[1] || 'png'
       a.download = `image-${Date.now()}.${ext}`
       document.body.appendChild(a)
       a.click()

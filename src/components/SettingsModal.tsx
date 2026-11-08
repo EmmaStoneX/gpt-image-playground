@@ -11,6 +11,7 @@ import {
   DEFAULT_RESPONSES_MODEL,
   DEFAULT_SETTINGS,
   getActiveApiProfile,
+  splitModelList,
   normalizeSettings,
   switchApiProfileProvider,
 } from '../lib/apiProfiles'
@@ -18,15 +19,16 @@ import type { ApiProfile, AppSettings } from '../types'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { useVersionCheck } from '../hooks/useVersionCheck'
 import Select from './Select'
+import { getParamDisabledReasons } from '../lib/paramCompatibility'
 
 const REPO_URL = 'https://github.com/EmmaStoneX/gpt-image-playground'
 
-type SettingsTab = 'api' | 'defaults' | 'data' | 'about'
+type SettingsTab = 'api' | 'defaults' | 'behavior' | 'data' | 'about'
 
 const TABS: { id: SettingsTab; label: string; icon: ReactElement }[] = [
   {
     id: 'api',
-    label: 'API 配置',
+    label: 'API 与供应商',
     icon: (
       <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
         <path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
@@ -35,13 +37,18 @@ const TABS: { id: SettingsTab; label: string; icon: ReactElement }[] = [
   },
   {
     id: 'defaults',
-    label: '生成默认值',
+    label: '模型与输出',
     icon: (
       <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
         <line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" />
         <circle cx="9" cy="6" r="2" fill="currentColor" stroke="none" /><circle cx="15" cy="12" r="2" fill="currentColor" stroke="none" /><circle cx="9" cy="18" r="2" fill="currentColor" stroke="none" />
       </svg>
     ),
+  },
+  {
+    id: 'behavior',
+    label: '生成行为',
+    icon: <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14" /><circle cx="9" cy="7" r="2" fill="currentColor" stroke="none" /><circle cx="15" cy="12" r="2" fill="currentColor" stroke="none" /></svg>,
   },
   {
     id: 'data',
@@ -74,11 +81,15 @@ const QUALITY_OPTIONS = [
   { label: '低', value: 'low' },
   { label: '中', value: 'medium' },
   { label: '高', value: 'high' },
+  { label: '超高', value: 'xhigh' },
+  { label: '最高', value: 'max' },
 ]
 const FORMAT_OPTIONS = [
   { label: 'PNG', value: 'png' },
   { label: 'JPEG', value: 'jpeg' },
   { label: 'WebP', value: 'webp' },
+  { label: 'SVG', value: 'svg' },
+  { label: 'GIF', value: 'gif' },
 ]
 const MODERATION_OPTIONS = [
   { label: '自动', value: 'auto' },
@@ -114,6 +125,7 @@ export default function SettingsModal() {
   const apiProxyAvailable = isApiProxyAvailable(readClientDevProxyConfig())
   const activeProfile = draft.profiles.find((profile) => profile.id === draft.activeProfileId) ?? draft.profiles[0] ?? getActiveApiProfile(draft)
   const apiProxyEnabled = apiProxyAvailable && activeProfile.provider === 'openai' && activeProfile.apiProxy
+  const paramDisabled = getParamDisabledReasons(settings)
 
   const getDefaultModelForMode = (apiMode: AppSettings['apiMode']) =>
     apiMode === 'responses' ? DEFAULT_RESPONSES_MODEL : DEFAULT_IMAGES_MODEL
@@ -344,10 +356,10 @@ export default function SettingsModal() {
   return (
     <div data-no-drag-select className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm animate-overlay-in" onClick={handleClose} />
-      <div className="relative z-10 flex w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-white/50 bg-white shadow-2xl ring-1 ring-black/5 animate-modal-in dark:border-white/[0.08] dark:bg-gray-900 dark:ring-white/10 sm:rounded-2xl sm:h-[600px] sm:max-h-[88vh] sm:flex-row max-h-[92dvh]">
+      <div className="relative z-10 flex h-[94dvh] w-full max-w-[1360px] flex-col overflow-hidden rounded-t-2xl border border-white/50 bg-[#f6f6f9] shadow-2xl ring-1 ring-black/5 animate-modal-in dark:border-white/[0.08] dark:bg-gray-950 dark:ring-white/10 sm:h-[min(920px,calc(100dvh-32px))] sm:flex-row sm:rounded-2xl">
 
         {/* 桌面侧边栏 */}
-        <div className="hidden shrink-0 flex-col gap-1 border-r border-gray-200 bg-gray-50/80 p-3 dark:border-white/[0.08] dark:bg-white/[0.02] sm:flex sm:w-52">
+        <div className="hidden shrink-0 flex-col gap-1 border-r border-[#e4e4ec] bg-white p-4 dark:border-white/[0.08] dark:bg-gray-900 sm:flex sm:w-64">
           <div className="flex items-center gap-2 px-2 py-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500 text-white">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -363,7 +375,7 @@ export default function SettingsModal() {
               onClick={() => setTab(t.id)}
               className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition ${
                 tab === t.id
-                  ? 'bg-blue-500 text-white shadow-sm'
+                  ? 'bg-[#eaf6ff] text-[#087bc0] dark:bg-blue-500/15 dark:text-blue-300'
                   : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/[0.06]'
               }`}
             >
@@ -400,12 +412,12 @@ export default function SettingsModal() {
           </div>
 
           {/* 桌面端内容标题 */}
-          <div className="hidden items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-white/[0.08] sm:flex">
-            <h3 className="text-base font-semibold text-gray-800 dark:text-gray-100">{tabTitle}</h3>
+          <div className="hidden items-center justify-between border-b border-[#e4e4ec] bg-white px-8 py-5 dark:border-white/[0.08] dark:bg-gray-900 sm:flex">
+            <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100">{tabTitle}</h3>
             {closeBtn}
           </div>
 
-          <div className={`flex-1 custom-scrollbar px-4 py-3 sm:px-6 sm:py-4 ${tab === 'api' ? 'overflow-hidden sm:overflow-y-auto' : 'overflow-y-auto'}`}>
+          <div className={`flex-1 custom-scrollbar px-4 py-4 sm:px-8 sm:py-6 ${tab === 'api' ? 'overflow-hidden sm:overflow-y-auto' : 'overflow-y-auto'}`}>
             {tab === 'api' && (
               <div className="space-y-2.5">
                 {/* 配置方案 */}
@@ -620,7 +632,7 @@ export default function SettingsModal() {
 
                 <div className="grid grid-cols-2 gap-2.5">
                   <label className={`block min-w-0 ${activeProfile.provider !== 'openai' ? 'col-span-2' : ''}`}>
-                    <span className={labelCls}>模型 ID</span>
+                    <span className={labelCls}>模型 ID（多个模型用逗号分隔）</span>
                     <input
                       value={activeProfile.model}
                       onChange={(e) => updateActiveProfile({ model: e.target.value })}
@@ -648,6 +660,15 @@ export default function SettingsModal() {
                   )}
                 </div>
 
+                {activeProfile.provider === 'openai' && <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                  {apiMode === 'responses' && <label className="block min-w-0"><span className={labelCls}>出图模型 ID</span>
+                    <input value={activeProfile.imageGenerationModel ?? ''} onChange={(e) => updateActiveProfile({ imageGenerationModel: e.target.value })} onBlur={(e) => commitActiveProfilePatch({ imageGenerationModel: e.target.value })} placeholder={DEFAULT_IMAGES_MODEL} className={fieldCls} />
+                  </label>}
+                  <label className="block min-w-0"><span className={labelCls}>SVG 编写模型 ID</span>
+                    <input value={activeProfile.svgModel ?? ''} onChange={(e) => updateActiveProfile({ svgModel: e.target.value })} onBlur={(e) => commitActiveProfilePatch({ svgModel: e.target.value })} placeholder="gpt-6.1-sol" className={fieldCls} />
+                  </label>
+                </div>}
+
                 <div className={`grid gap-2.5 ${apiProxyAvailable && activeProfile.provider === 'openai' ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'}`}>
                   {apiProxyAvailable && activeProfile.provider === 'openai' && renderSwitchCard(
                     '通过代理请求',
@@ -655,31 +676,30 @@ export default function SettingsModal() {
                     activeProfile.apiProxy,
                     () => updateActiveProfile({ apiProxy: !activeProfile.apiProxy }, true),
                   )}
-                  {renderSwitchCard(
-                    '提交后清空输入',
-                    '成功后清空输入',
-                    draft.clearInputAfterSubmit,
-                    () => commitSettings({ ...draft, clearInputAfterSubmit: !draft.clearInputAfterSubmit }),
-                  )}
                 </div>
               </div>
             )}
 
             {tab === 'defaults' && (
-              <div className="space-y-4">
-                <p className="text-xs text-gray-400 dark:text-gray-500">新建生成时默认使用以下参数，可在输入栏临时调整。</p>
-                <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-[14px] border border-[#e4e4ec] bg-white p-5 dark:border-white/10 dark:bg-gray-900 sm:p-8">
+                <h4 className="text-base font-semibold text-[#18181b] dark:text-gray-100">默认模型与格式</h4>
+                <p className="mt-1 text-xs text-[#5b5b66] dark:text-gray-400">为新任务设置参数；每次生成仍可在输入框中调整。</p>
+                <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  <label className="block">
+                    <span className={labelCls}>默认模型（{providerLabel(activeProfile.provider)}）</span>
+                    <Select value={getActiveApiProfile(draft).model} onChange={(value) => updateActiveProfile({ selectedModel: value }, true)} options={splitModelList(activeProfile.model).map((model) => ({ label: model, value: model }))} className={fieldCls} />
+                  </label>
                   <label className="block">
                     <span className={labelCls}>默认尺寸</span>
                     <Select value={params.size} onChange={(v) => setParams({ size: v })} options={SIZE_OPTIONS} className={fieldCls} />
                   </label>
                   <label className="block">
                     <span className={labelCls}>默认质量</span>
-                    <Select value={params.quality} onChange={(v) => setParams({ quality: v as any })} options={QUALITY_OPTIONS} className={fieldCls} />
+                    <Select value={params.quality} onChange={(v) => setParams({ quality: v as any })} options={QUALITY_OPTIONS.map((option) => ({ ...option, disabledReason: option.value === 'xhigh' || option.value === 'max' ? paramDisabled.extendedQuality : undefined }))} className={fieldCls} />
                   </label>
                   <label className="block">
                     <span className={labelCls}>输出格式</span>
-                    <Select value={params.output_format} onChange={(v) => setParams({ output_format: v as any })} options={FORMAT_OPTIONS} className={fieldCls} />
+                    <Select value={params.output_format} onChange={(v) => setParams({ output_format: v as any })} options={FORMAT_OPTIONS.map((option) => ({ ...option, disabledReason: option.value === 'svg' ? paramDisabled.svg : option.value === 'gif' ? paramDisabled.gif : undefined }))} className={fieldCls} />
                   </label>
                   <label className="block">
                     <span className={labelCls}>压缩质量</span>
@@ -712,9 +732,33 @@ export default function SettingsModal() {
                       className={fieldCls}
                     />
                   </label>
+                  {!paramDisabled.complexity && <label className="block">
+                    <span className={labelCls}>复杂度</span>
+                    <Select value={params.complexity} onChange={(v) => setParams({ complexity: v as typeof params.complexity })} options={[{ label: '自动', value: 'auto' }, { label: '低', value: 'low' }, { label: '中', value: 'medium' }, { label: '高', value: 'high' }]} className={fieldCls} />
+                  </label>}
+                  {params.output_format === 'gif' && <>
+                    <label className="block"><span className={labelCls}>GIF 帧数</span><input type="number" min={1} max={100} value={params.frame_count} onChange={(event) => setParams({ frame_count: Math.max(1, Number(event.target.value) || 1) })} className={fieldCls} /></label>
+                    <label className="block"><span className={labelCls}>每帧时长 (毫秒)</span><input type="number" min={20} max={10000} value={params.frame_duration_ms} onChange={(event) => setParams({ frame_duration_ms: Math.max(20, Number(event.target.value) || 20) })} className={fieldCls} /></label>
+                  </>}
                 </div>
               </div>
             )}
+
+            {tab === 'behavior' && <div className="space-y-5 rounded-[14px] border border-[#e4e4ec] bg-white p-5 dark:border-white/10 dark:bg-gray-900 sm:p-8">
+              <div><h4 className="text-base font-semibold text-[#18181b] dark:text-gray-100">流式预览与恢复</h4><p className="mt-1 text-xs text-[#5b5b66] dark:text-gray-400">fal 队列请求会在连接中断后自动查询状态；OpenAI 流式请求中断后可手动重试。</p></div>
+              {activeProfile.provider === 'openai' && <>
+                {renderSwitchCard('显示流式预览', '生成过程中显示中间图像', Boolean(activeProfile.streamImages), () => updateActiveProfile({ streamImages: !activeProfile.streamImages }, true))}
+                {activeProfile.streamImages && <label className="block max-w-xs"><span className={labelCls}>中间预览张数</span><input type="number" min={0} max={3} value={activeProfile.streamPartialImages ?? 1} onChange={(event) => updateActiveProfile({ streamPartialImages: Math.min(3, Math.max(0, Number(event.target.value) || 0)) }, true)} className={fieldCls} /></label>}
+              </>}
+              <div className="border-t border-[#e4e4ec] pt-5 dark:border-white/10"><h4 className="text-base font-semibold text-[#18181b] dark:text-gray-100">批量任务</h4><p className="mt-1 text-xs text-[#5b5b66] dark:text-gray-400">多个提示词使用两个空行分隔。</p></div>
+              {renderSwitchCard('启用批量提示词', '在输入栏显示批量生成选项', draft.batchPromptEnabled, () => commitSettings({ ...draft, batchPromptEnabled: !draft.batchPromptEnabled }))}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block"><span className={labelCls}>提交方式</span><Select value={draft.batchPromptMode} onChange={(value) => commitSettings({ ...draft, batchPromptMode: value as 'queue' | 'concurrent' })} options={[{ label: '排队提交', value: 'queue' }, { label: '并发提交', value: 'concurrent' }]} className={fieldCls} /></label>
+                {draft.batchPromptMode === 'concurrent' && <label className="block"><span className={labelCls}>同时运行上限</span><input type="number" min={1} max={20} value={draft.batchPromptConcurrency} onChange={(event) => commitSettings({ ...draft, batchPromptConcurrency: Math.min(20, Math.max(1, Number(event.target.value) || 1)) })} className={fieldCls} /></label>}
+              </div>
+              <div className="border-t border-[#e4e4ec] pt-5 dark:border-white/10"><h4 className="text-base font-semibold text-[#18181b] dark:text-gray-100">输入行为</h4></div>
+              {renderSwitchCard('提交后清空输入', '保留或清空上一次的提示词与参考图', draft.clearInputAfterSubmit, () => commitSettings({ ...draft, clearInputAfterSubmit: !draft.clearInputAfterSubmit }))}
+            </div>}
 
             {tab === 'data' && (
               <div className="space-y-4">
@@ -802,19 +846,14 @@ export default function SettingsModal() {
             )}
           </div>
 
-          {(tab === 'api' || tab === 'defaults') && (
+          {(tab === 'api' || tab === 'defaults' || tab === 'behavior') && (
             <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-4 py-2 dark:border-white/[0.08] sm:px-6 sm:py-3">
-              <button
-                onClick={handleClose}
-                className="rounded-xl px-4 py-2 text-sm font-medium text-gray-500 transition hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/[0.06]"
-              >
-                取消
-              </button>
+              <span className="mr-auto text-xs text-gray-400 dark:text-gray-500">更改已自动保存</span>
               <button
                 onClick={handleClose}
                 className="rounded-xl bg-blue-500 px-5 py-2 text-sm font-semibold text-white transition hover:bg-blue-600"
               >
-                保存
+                完成
               </button>
             </div>
           )}

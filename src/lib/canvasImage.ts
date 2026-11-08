@@ -36,6 +36,18 @@ export async function imageDataUrlToPngBlob(dataUrl: string): Promise<Blob> {
   return canvasToBlob(canvas, 'image/png')
 }
 
+export async function composeMarkupDataUrl(imageDataUrl: string, markupDataUrl: string): Promise<string> {
+  const [image, markup] = await Promise.all([loadImage(imageDataUrl), loadImage(markupDataUrl)])
+  const canvas = document.createElement('canvas')
+  canvas.width = image.naturalWidth
+  canvas.height = image.naturalHeight
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('当前浏览器不支持 Canvas')
+  ctx.drawImage(image, 0, 0)
+  ctx.drawImage(markup, 0, 0, canvas.width, canvas.height)
+  return canvas.toDataURL('image/png')
+}
+
 export async function maskDataUrlToPngBlob(maskDataUrl: string): Promise<Blob> {
   const blob = await dataUrlToBlob(maskDataUrl, 'image/png')
   if (blob.type !== 'image/png') {

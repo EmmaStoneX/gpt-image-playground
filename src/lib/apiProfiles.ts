@@ -1,5 +1,6 @@
 import type { ApiMode, ApiProfile, ApiProvider, AppSettings } from '../types'
 import { readRuntimeEnv } from './runtimeEnv'
+import { resolveApiProfileModel, splitModelList } from './imageModels'
 
 const DEFAULT_BASE_URL = readRuntimeEnv(import.meta.env.VITE_DEFAULT_API_URL) || 'https://api.openai.com/v1'
 export const DEFAULT_IMAGES_MODEL = 'gpt-image-2'
@@ -17,6 +18,10 @@ export function createDefaultOpenAIProfile(overrides: Partial<ApiProfile> = {}):
     baseUrl: DEFAULT_BASE_URL,
     apiKey: '',
     model: DEFAULT_IMAGES_MODEL,
+    imageGenerationModel: DEFAULT_IMAGES_MODEL,
+    svgModel: 'gpt-6.1-sol',
+    streamImages: false,
+    streamPartialImages: 1,
     timeout: DEFAULT_API_TIMEOUT,
     apiMode: 'images',
     codexCli: false,
@@ -76,6 +81,12 @@ export function normalizeApiProfile(input: unknown, fallback?: Partial<ApiProfil
     baseUrl: typeof record.baseUrl === 'string' ? record.baseUrl : defaults.baseUrl,
     apiKey: typeof record.apiKey === 'string' ? record.apiKey : defaults.apiKey,
     model: typeof record.model === 'string' && record.model.trim() ? record.model : defaults.model,
+    selectedModel: typeof record.selectedModel === 'string' ? record.selectedModel : undefined,
+    imageGenerationModel: typeof record.imageGenerationModel === 'string' ? record.imageGenerationModel : defaults.imageGenerationModel,
+    svgModel: typeof record.svgModel === 'string' ? record.svgModel : defaults.svgModel,
+    streamImages: record.streamImages === true,
+    streamPartialImages: typeof record.streamPartialImages === 'number' && Number.isFinite(record.streamPartialImages)
+      ? Math.min(3, Math.max(0, Math.round(record.streamPartialImages))) : 1,
     timeout: typeof record.timeout === 'number' && Number.isFinite(record.timeout) ? record.timeout : defaults.timeout,
     apiMode,
     codexCli: Boolean(record.codexCli),
@@ -111,6 +122,10 @@ export function normalizeSettings(input: Partial<AppSettings> | unknown): AppSet
     codexCli: active.codexCli,
     apiProxy: active.apiProxy,
     clearInputAfterSubmit: typeof record.clearInputAfterSubmit === 'boolean' ? record.clearInputAfterSubmit : false,
+    batchPromptEnabled: record.batchPromptEnabled === true,
+    batchPromptMode: record.batchPromptMode === 'queue' ? 'queue' : 'concurrent',
+    batchPromptConcurrency: typeof record.batchPromptConcurrency === 'number' && Number.isFinite(record.batchPromptConcurrency)
+      ? Math.max(1, Math.round(record.batchPromptConcurrency)) : 3,
     profiles,
     activeProfileId,
   }
@@ -121,7 +136,7 @@ export function getActiveApiProfile(settings: Partial<AppSettings> | unknown): A
   const normalized = normalizeSettings(settings)
   const profile = normalized.profiles.find((p) => p.id === normalized.activeProfileId) ?? normalized.profiles[0] ?? createDefaultOpenAIProfile()
 
-  return {
+  return resolveApiProfileModel({
     ...profile,
     baseUrl: typeof record.baseUrl === 'string' ? record.baseUrl : profile.baseUrl,
     apiKey: typeof record.apiKey === 'string' ? record.apiKey : profile.apiKey,
@@ -130,8 +145,10 @@ export function getActiveApiProfile(settings: Partial<AppSettings> | unknown): A
     apiMode: record.apiMode === 'images' || record.apiMode === 'responses' ? record.apiMode : profile.apiMode,
     codexCli: typeof record.codexCli === 'boolean' ? record.codexCli : profile.codexCli,
     apiProxy: typeof record.apiProxy === 'boolean' ? record.apiProxy : profile.apiProxy,
-  }
+  })
 }
+
+export { splitModelList }
 
 export function validateApiProfile(profile: ApiProfile): string | null {
   if (!profile.name.trim()) return '缺少名称'

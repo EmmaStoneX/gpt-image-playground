@@ -109,10 +109,12 @@ export function formatImageRatio(width: number, height: number) {
   ]
 
   for (const [commonWidth, commonHeight] of commonRatios) {
-    if (simplifiedWidth === commonWidth && simplifiedHeight === commonHeight) {
-      return simplified
+    if (simplifiedWidth * commonHeight === simplifiedHeight * commonWidth) {
+      return `${commonWidth}:${commonHeight}`
     }
   }
+
+  if (simplifiedWidth <= 12 && simplifiedHeight <= 12) return simplified
 
   const actualRatio = roundedWidth / roundedHeight
   const squareDelta = Math.abs(actualRatio - 1)

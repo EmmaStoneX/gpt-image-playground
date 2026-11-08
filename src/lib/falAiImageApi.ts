@@ -1,5 +1,6 @@
 import { fal } from '@fal-ai/client'
 import type { ApiProfile, FalApiResponse, TaskParams } from '../types'
+import { supportsGptImage26Params } from './imageModels'
 import {
   assertImageInputPayloadSize,
   assertMaskEditFileSize,
@@ -32,7 +33,7 @@ async function mapFalImageSize(size: string): Promise<{ width: number; height: n
 }
 
 function mapFalQuality(quality: TaskParams['quality']): 'low' | 'medium' | 'high' {
-  return quality === 'auto' ? 'high' : quality
+  return quality === 'auto' || quality === 'xhigh' || quality === 'max' ? 'high' : quality
 }
 
 function configureFal(profile: ApiProfile) {
@@ -42,7 +43,7 @@ function configureFal(profile: ApiProfile) {
   })
 }
 
-async function createFalRequestInput(opts: CallApiOptions): Promise<Record<string, unknown>> {
+async function createFalRequestInput(opts: CallApiOptions, profile: ApiProfile): Promise<Record<string, unknown>> {
   const isEdit = opts.inputImageDataUrls.length > 0
   const input: Record<string, unknown> = {
     prompt: opts.prompt,
@@ -50,6 +51,13 @@ async function createFalRequestInput(opts: CallApiOptions): Promise<Record<strin
     quality: mapFalQuality(opts.params.quality),
     num_images: Math.min(4, Math.max(1, opts.params.n || 1)),
     output_format: opts.params.output_format,
+  }
+  if (supportsGptImage26Params(profile)) {
+    if (opts.params.complexity !== 'auto') input.reasoning_effort = opts.params.complexity
+    if (opts.params.output_format === 'gif') {
+      input.frame_count = opts.params.frame_count
+      input.frame_duration_ms = opts.params.frame_duration_ms
+    }
   }
 
   if (isEdit) {
@@ -59,6 +67,7 @@ async function createFalRequestInput(opts: CallApiOptions): Promise<Record<strin
   if (opts.maskDataUrl) {
     input.mask_url = opts.maskDataUrl
   }
+  if (opts.markupDataUrl) input.markup_image_url = opts.markupDataUrl
 
   return input
 }
@@ -163,7 +172,7 @@ export async function callFalAiImageApi(opts: CallApiOptions, profile: ApiProfil
 
     const isEdit = opts.inputImageDataUrls.length > 0
     const endpoint = mapFalEndpoint(profile.model, isEdit)
-    const input = await createFalRequestInput(opts)
+    const input = await createFalRequestInput(opts, profile)
     const result = await fal.subscribe(endpoint, {
       input,
       logs: true,
