@@ -746,13 +746,13 @@ export default function SettingsModal() {
               </div>
             )}
 
-            {tab === 'behavior' && <div className="space-y-5 rounded-[14px] border border-[#e4e4ec] bg-white p-5 dark:border-white/10 dark:bg-gray-900 sm:p-8">
-              <div><h4 className="text-base font-semibold text-[#18181b] dark:text-gray-100">流式预览与恢复</h4><p className="mt-1 text-xs text-[#5b5b66] dark:text-gray-400">fal 队列请求会在连接中断后自动查询状态；OpenAI 流式请求中断后可手动重试。</p></div>
+            {tab === 'behavior' && <div className="space-y-4">
+              <div><h4 className="text-sm font-semibold text-gray-800 dark:text-gray-100">流式预览与恢复</h4><p className="mt-1 text-xs text-gray-400 dark:text-gray-500">fal 队列请求会在连接中断后自动查询状态；OpenAI 流式请求中断后可手动重试。</p></div>
               {activeProfile.provider === 'openai' && <>
                 {renderSwitchCard('显示流式预览', '生成过程中显示中间图像', Boolean(activeProfile.streamImages), () => updateActiveProfile({ streamImages: !activeProfile.streamImages }, true))}
                 {activeProfile.streamImages && <label className="block max-w-xs"><span className={labelCls}>中间预览张数</span><input type="number" min={0} max={3} value={activeProfile.streamPartialImages ?? 1} onChange={(event) => updateActiveProfile({ streamPartialImages: Math.min(3, Math.max(0, Number(event.target.value) || 0)) }, true)} className={fieldCls} /></label>}
               </>}
-              <div className="border-t border-[#e4e4ec] pt-5 dark:border-white/10"><h4 className="text-base font-semibold text-[#18181b] dark:text-gray-100">批量任务</h4><p className="mt-1 text-xs text-[#5b5b66] dark:text-gray-400">多个提示词使用两个空行分隔。</p></div>
+              <div className="border-t border-gray-100 pt-4 dark:border-white/[0.08]"><h4 className="text-sm font-semibold text-gray-800 dark:text-gray-100">批量任务</h4><p className="mt-1 text-xs text-gray-400 dark:text-gray-500">多个提示词使用两个空行分隔。</p></div>
               {renderSwitchCard('启用批量提示词', '在输入栏显示批量生成选项', draft.batchPromptEnabled, () => commitSettings({ ...draft, batchPromptEnabled: !draft.batchPromptEnabled }))}
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block"><span className={labelCls}>提交方式</span><Select value={draft.batchPromptMode} onChange={(value) => commitSettings({ ...draft, batchPromptMode: value as 'queue' | 'concurrent' })} options={[{ label: '排队提交', value: 'queue' }, { label: '并发提交', value: 'concurrent' }]} className={fieldCls} /></label>

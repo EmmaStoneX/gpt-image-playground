@@ -1228,7 +1228,7 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
                   value={activeProfile.model}
                   onChange={(event) => setSettings({ profiles: settings.profiles.map((profile) => profile.id === activeProfile.id ? { ...profile, selectedModel: event.target.value } : profile) })}
                   disabled={Boolean(batchProgress)}
-                  title={modelOptions.length === 1 ? '在设置的 API 与供应商中用逗号添加更多模型' : undefined}
+                  title={modelOptions.length === 1 ? '在设置的 API 配置中用逗号添加更多模型' : undefined}
                   className="h-7 w-40 appearance-none rounded-lg border border-[#e4e4ec] bg-[#f6f6f9] pl-2.5 pr-7 text-xs font-medium text-[#18181b] outline-none focus:border-[#0d99ff] disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-100 sm:w-52"
                 >
                   {modelOptions.map((model) => <option key={model} value={model}>{model}</option>)}
