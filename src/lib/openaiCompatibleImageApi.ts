@@ -45,10 +45,6 @@ function createResponsesImageTool(
   if (profile.imageGenerationModel?.trim()) tool.model = profile.imageGenerationModel.trim()
   if (profile.streamImages && params.output_format !== 'svg' && params.output_format !== 'gif') tool.partial_images = profile.streamPartialImages ?? 1
 
-  if (!profile.codexCli) {
-    tool.quality = params.quality
-  }
-
   if (params.output_format !== 'png' && params.output_compression != null) {
     tool.output_compression = params.output_compression
   }
@@ -172,7 +168,7 @@ async function callImagesApi(opts: CallApiOptions, profile: ApiProfile): Promise
 }
 
 async function callImagesApiConcurrent(opts: CallApiOptions, profile: ApiProfile, n: number): Promise<CallApiResult> {
-  const singleOpts = { ...opts, params: { ...opts.params, n: 1, ...(profile.codexCli ? { quality: 'auto' as const } : {}) } }
+  const singleOpts = { ...opts, params: { ...opts.params, n: 1 } }
   const results = await Promise.allSettled(
     Array.from({ length: n }).map(() => callImagesApiSingle(singleOpts, profile)),
   )
@@ -226,11 +222,6 @@ async function callImagesApiSingle(opts: CallApiOptions, profile: ApiProfile): P
       formData.append('prompt', prompt)
       formData.append('size', params.size)
       formData.append('output_format', params.output_format)
-      formData.append('moderation', params.moderation)
-
-      if (!profile.codexCli) {
-        formData.append('quality', params.quality)
-      }
 
       if (params.output_format !== 'png' && params.output_compression != null) {
         formData.append('output_compression', String(params.output_compression))
@@ -292,11 +283,6 @@ async function callImagesApiSingle(opts: CallApiOptions, profile: ApiProfile): P
         prompt,
         size: params.size,
         output_format: params.output_format,
-        moderation: params.moderation,
-      }
-
-      if (!profile.codexCli) {
-        body.quality = params.quality
       }
 
       if (params.output_format !== 'png' && params.output_compression != null) {

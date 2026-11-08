@@ -127,9 +127,7 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
   const [submitHover, setSubmitHover] = useState(false)
   const [attachHover, setAttachHover] = useState(false)
   const [compressionHintVisible, setCompressionHintVisible] = useState(false)
-  const [moderationHintVisible, setModerationHintVisible] = useState(false)
   const [sizeHintVisible, setSizeHintVisible] = useState(false)
-  const [qualityHintVisible, setQualityHintVisible] = useState(false)
   const [imageHintId, setImageHintId] = useState<string | null>(null)
   const [mobileCollapsed, setMobileCollapsed] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -148,9 +146,7 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
   const suppressImageClickRef = useRef(false)
   const maskConflictNoticeShownRef = useRef(false)
   const compressionHintTimerRef = useRef<number | null>(null)
-  const moderationHintTimerRef = useRef<number | null>(null)
   const sizeHintTimerRef = useRef<number | null>(null)
-  const qualityHintTimerRef = useRef<number | null>(null)
   const imageHintTimerRef = useRef<number | null>(null)
   const nLimitHintTimerRef = useRef<number | null>(null)
   const [outputCompressionInput, setOutputCompressionInput] = useState(
@@ -174,7 +170,6 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
   const activeProvider = activeProfile.provider
   const isFalProvider = activeProvider === 'fal'
   const paramDisabled = getParamDisabledReasons(settings)
-  const moderationDisabled = settings.apiMode === 'responses' || isFalProvider
   const compressionDisabled = params.output_format === 'png' || params.output_format === 'svg' || params.output_format === 'gif' || isFalProvider
   const outputImageLimit = getOutputImageLimitForSettings(settings)
   const nLimitHintText = isFalProvider
@@ -183,29 +178,6 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
   const displaySize = isFalProvider && params.size === 'auto'
     ? DEFAULT_FAL_IMAGE_SIZE
     : normalizeImageSize(params.size) || DEFAULT_PARAMS.size
-  const qualityOptions = isFalProvider
-    ? [
-        { label: 'low', value: 'low' },
-        { label: 'medium', value: 'medium' },
-        { label: 'high', value: 'high' },
-        { label: 'xhigh', value: 'xhigh', disabledReason: paramDisabled.extendedQuality },
-        { label: 'max', value: 'max', disabledReason: paramDisabled.extendedQuality },
-      ]
-    : [
-        { label: 'auto', value: 'auto' },
-        { label: 'low', value: 'low' },
-        { label: 'medium', value: 'medium' },
-        { label: 'high', value: 'high' },
-        { label: 'xhigh', value: 'xhigh', disabledReason: paramDisabled.extendedQuality },
-        { label: 'max', value: 'max', disabledReason: paramDisabled.extendedQuality },
-      ]
-  const qualityLabelMap: Record<string, string> = { auto: '自动', low: '低质量', medium: '中质量', high: '高质量', xhigh: '超高质量', max: '最高质量' }
-  const effectiveQuality = settings.codexCli
-    ? 'auto'
-    : isFalProvider && params.quality === 'auto'
-      ? 'high'
-      : params.quality
-  const qualityLabel = qualityLabelMap[effectiveQuality] ?? effectiveQuality
   const atImageLimit = inputImages.length >= API_MAX_IMAGES
   const maskTargetImage = maskDraft
     ? inputImages.find((img) => img.id === maskDraft.targetImageId) ?? null
@@ -235,12 +207,6 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
   useEffect(() => () => {
     if (compressionHintTimerRef.current != null) {
       window.clearTimeout(compressionHintTimerRef.current)
-    }
-    if (moderationHintTimerRef.current != null) {
-      window.clearTimeout(moderationHintTimerRef.current)
-    }
-    if (qualityHintTimerRef.current != null) {
-      window.clearTimeout(qualityHintTimerRef.current)
     }
     if (sizeHintTimerRef.current != null) {
       window.clearTimeout(sizeHintTimerRef.current)
@@ -342,30 +308,6 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
     showNLimitHint()
   }, [nInput, nInputFocused, outputImageLimit, params.n, showNLimitHint])
 
-  const showModerationHint = () => {
-    if (moderationDisabled) setModerationHintVisible(true)
-  }
-
-  const hideModerationHint = () => {
-    setModerationHintVisible(false)
-    clearModerationHintTimer()
-  }
-
-  const clearModerationHintTimer = () => {
-    if (moderationHintTimerRef.current != null) {
-      window.clearTimeout(moderationHintTimerRef.current)
-      moderationHintTimerRef.current = null
-    }
-  }
-
-  const startModerationHintTouch = () => {
-    if (!moderationDisabled) return
-    moderationHintTimerRef.current = window.setTimeout(() => {
-      setModerationHintVisible(true)
-      moderationHintTimerRef.current = null
-    }, 450)
-  }
-
   const showCompressionHint = () => setCompressionHintVisible(true)
 
   const hideCompressionHint = () => {
@@ -385,10 +327,6 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
       setCompressionHintVisible(true)
       compressionHintTimerRef.current = null
     }, 450)
-  }
-
-  const showQualityHint = () => {
-    if (settings.codexCli || isFalProvider) setQualityHintVisible(true)
   }
 
   const showSizeHint = () => {
@@ -412,26 +350,6 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
     sizeHintTimerRef.current = window.setTimeout(() => {
       setSizeHintVisible(true)
       sizeHintTimerRef.current = null
-    }, 450)
-  }
-
-  const hideQualityHint = () => {
-    setQualityHintVisible(false)
-    clearQualityHintTimer()
-  }
-
-  const clearQualityHintTimer = () => {
-    if (qualityHintTimerRef.current != null) {
-      window.clearTimeout(qualityHintTimerRef.current)
-      qualityHintTimerRef.current = null
-    }
-  }
-
-  const startQualityHintTouch = () => {
-    if (!settings.codexCli && !isFalProvider) return
-    qualityHintTimerRef.current = window.setTimeout(() => {
-      setQualityHintVisible(true)
-      qualityHintTimerRef.current = null
     }, 450)
   }
 
@@ -983,32 +901,17 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
           text={<>fal.ai 不支持 <code className="rounded bg-white/10 px-1 py-0.5 font-mono">auto</code> 参数</>}
         />
       </label>
-      <label
-        className="relative flex flex-col gap-0.5"
-        onMouseEnter={showQualityHint}
-        onMouseLeave={hideQualityHint}
-        onTouchStart={startQualityHintTouch}
-        onTouchEnd={clearQualityHintTimer}
-        onTouchCancel={hideQualityHint}
-        onClick={showQualityHint}
-      >
-        <span className="text-gray-400 dark:text-gray-500 ml-1">质量</span>
-        <Select
-          value={settings.codexCli ? 'auto' : isFalProvider && params.quality === 'auto' ? 'high' : params.quality}
-          onChange={(val) => {
-            if (!settings.codexCli) setParams({ quality: val as any })
-          }}
-          options={qualityOptions}
-          disabled={settings.codexCli}
-          className={settings.codexCli
-            ? 'px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] bg-gray-100/50 dark:bg-white/[0.05] opacity-50 cursor-not-allowed text-xs transition-all duration-200 shadow-sm'
-            : selectClass}
-        />
-        <ButtonTooltip
-          visible={(settings.codexCli || isFalProvider) && qualityHintVisible}
-          text={isFalProvider ? <>fal.ai 不支持 <code className="rounded bg-white/10 px-1 py-0.5 font-mono">auto</code> 参数</> : 'Codex CLI 不支持质量参数'}
-        />
-      </label>
+      {!paramDisabled.complexity && (
+        <label className="flex flex-col gap-0.5">
+          <span className="text-gray-400 dark:text-gray-500 ml-1">复杂度</span>
+          <Select
+            value={params.complexity}
+            onChange={(value) => setParams({ complexity: value as typeof params.complexity })}
+            options={[{ label: '自动', value: 'auto' }, { label: '低', value: 'low' }, { label: '中', value: 'medium' }, { label: '高', value: 'high' }]}
+            className={selectClass}
+          />
+        </label>
+      )}
       <label className="flex flex-col gap-0.5">
         <span className="text-gray-400 dark:text-gray-500 ml-1">格式</span>
         <Select
@@ -1052,35 +955,6 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
         <ButtonTooltip
           visible={compressionHintVisible}
           text={isFalProvider ? 'fal.ai 不支持压缩率参数' : '仅 JPEG 和 WebP 支持压缩率'}
-        />
-      </label>
-      <label
-        className="relative flex flex-col gap-0.5"
-        onMouseEnter={showModerationHint}
-        onMouseLeave={hideModerationHint}
-        onTouchStart={startModerationHintTouch}
-        onTouchEnd={clearModerationHintTimer}
-        onTouchCancel={hideModerationHint}
-        onClick={showModerationHint}
-      >
-        <span className="text-gray-400 dark:text-gray-500 ml-1">审核</span>
-        <Select
-          value={moderationDisabled ? 'auto' : params.moderation}
-          onChange={(val) => {
-            if (!moderationDisabled) setParams({ moderation: val as any })
-          }}
-          options={[
-            { label: 'auto', value: 'auto' },
-            { label: 'low', value: 'low' },
-          ]}
-          disabled={moderationDisabled}
-          className={moderationDisabled
-            ? 'px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] bg-gray-100/50 dark:bg-white/[0.05] opacity-50 cursor-not-allowed text-xs transition-all duration-200 shadow-sm'
-            : selectClass}
-        />
-        <ButtonTooltip
-          visible={moderationDisabled && moderationHintVisible}
-          text={isFalProvider ? 'fal.ai 不支持审核参数' : 'Responses API 不支持审核参数'}
         />
       </label>
       <label className="relative flex flex-col gap-0.5">
@@ -1291,11 +1165,8 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
           {/* 高级参数抽屉 */}
           <div className={`collapse-section${showAdvanced ? '' : ' collapsed'}`}>
             <div className="collapse-inner px-1 pt-1">
-              {renderParams('grid-cols-2 sm:grid-cols-6')}
+              {renderParams(paramDisabled.complexity ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2 sm:grid-cols-5')}
               <div className="mt-2 flex flex-wrap items-end gap-2 text-xs">
-                {!paramDisabled.complexity && <label className="flex flex-col gap-0.5"><span className="text-gray-400">复杂度</span>
-                  <Select value={params.complexity} onChange={(value) => setParams({ complexity: value as typeof params.complexity })} options={[{ label: '自动', value: 'auto' }, { label: '低', value: 'low' }, { label: '中', value: 'medium' }, { label: '高', value: 'high' }]} className="h-[34px] min-w-28 rounded-xl border border-[#e4e4ec] bg-white px-3 text-xs text-[#18181b] dark:border-white/10 dark:bg-gray-900 dark:text-gray-100" />
-                </label>}
                 {params.output_format === 'gif' && <>
                   <label className="flex flex-col gap-0.5"><span className="text-gray-400">帧数</span><input type="number" min={2} max={16} value={params.frame_count} onChange={(e) => setParams({ frame_count: Number(e.target.value) })} className="w-20 rounded-xl border border-gray-200 bg-transparent px-3 py-1.5 dark:border-white/10" /></label>
                   <label className="flex flex-col gap-0.5"><span className="text-gray-400">帧间隔 ms</span><input type="number" min={20} max={2000} value={params.frame_duration_ms} onChange={(e) => setParams({ frame_duration_ms: Number(e.target.value) })} className="w-28 rounded-xl border border-gray-200 bg-transparent px-3 py-1.5 dark:border-white/10" /></label>
@@ -1355,8 +1226,6 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
                 <circle cx="9" cy="6" r="2" fill="currentColor" stroke="none" /><circle cx="15" cy="12" r="2" fill="currentColor" stroke="none" /><circle cx="9" cy="18" r="2" fill="currentColor" stroke="none" />
               </svg>
               <span className="font-mono font-medium leading-none">{displaySize}</span>
-              <span className="w-[3px] h-[3px] shrink-0 rounded-full bg-gray-400 dark:bg-gray-500" />
-              <span className="font-medium leading-none">{qualityLabel}</span>
             </button>
             <button
               onClick={() => setShowAdvanced((v) => !v)}

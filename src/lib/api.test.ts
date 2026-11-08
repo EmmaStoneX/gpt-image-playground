@@ -98,6 +98,45 @@ describe('callImageApi', () => {
     }])
   })
 
+  it.each([false, true])('omits saved quality and moderation from Images %s requests', async (isEdit) => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({
+      data: [{ b64_json: 'aW1hZ2U=' }],
+    }), { status: 200 }))
+
+    await callImageApi({
+      settings: { ...DEFAULT_SETTINGS, apiKey: 'test-key' },
+      prompt: 'prompt',
+      params: { ...DEFAULT_PARAMS, quality: 'max', moderation: 'low' },
+      inputImageDataUrls: isEdit ? ['data:image/png;base64,aW1hZ2U='] : [],
+    })
+
+    const body = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')?.[1]?.body
+    if (body instanceof FormData) {
+      expect(body.has('quality')).toBe(false)
+      expect(body.has('moderation')).toBe(false)
+    } else {
+      expect(JSON.parse(String(body))).not.toHaveProperty('quality')
+      expect(JSON.parse(String(body))).not.toHaveProperty('moderation')
+    }
+  })
+
+  it('omits saved quality from Responses image tools', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      output: [{ type: 'image_generation_call', result: 'aW1hZ2U=' }],
+    }), { status: 200 }))
+
+    await callImageApi({
+      settings: { ...DEFAULT_SETTINGS, apiKey: 'test-key', apiMode: 'responses' },
+      prompt: 'prompt',
+      params: { ...DEFAULT_PARAMS, quality: 'max', moderation: 'low' },
+      inputImageDataUrls: [],
+    })
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body))
+    expect(body.tools[0]).not.toHaveProperty('quality')
+    expect(body.tools[0]).not.toHaveProperty('moderation')
+  })
+
   it('uses the same-origin API proxy path when API proxy is enabled', async () => {
     vi.stubEnv('VITE_API_PROXY_AVAILABLE', 'true')
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({

@@ -28,17 +28,18 @@ describe('selected feature migration', () => {
     })
   })
 
-  it('disables 2.6-only params on 2.5 while retaining extended quality', () => {
+  it('disables 2.6-only params on 2.5', () => {
     const settings = settingsFor('gpt-image-2.5')
+    expect(getParamDisabledReasons(settings).complexity).toBeTruthy()
     expect(getParamDisabledReasons(settings).gif).toBeTruthy()
-    expect(getParamDisabledReasons(settings).extendedQuality).toBeUndefined()
-    expect(normalizeParamsForSettings({ ...DEFAULT_PARAMS, output_format: 'gif', complexity: 'high', quality: 'max' }, settings))
-      .toMatchObject({ output_format: 'png', complexity: 'auto', quality: 'max' })
+    expect(normalizeParamsForSettings({ ...DEFAULT_PARAMS, output_format: 'gif', complexity: 'high' }, settings))
+      .toMatchObject({ output_format: 'png', complexity: 'auto' })
   })
 
   it('sends 2.6 SVG author model and complexity in an Images request', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ data: [{ b64_json: 'PHN2Zz48L3N2Zz4=' }] }), { status: 200 }))
     const settings = normalizeSettings({ ...settingsFor('gpt-image-2.6-flare'), profiles: [{ ...settingsFor('gpt-image-2.6-flare').profiles[0], streamImages: true }] })
+    expect(getParamDisabledReasons(settings).complexity).toBeUndefined()
     await callImageApi({ settings: { ...settings, apiKey: 'test-key' }, prompt: 'vector', params: { ...DEFAULT_PARAMS, output_format: 'svg', complexity: 'medium' }, inputImageDataUrls: [] })
     const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body))
     expect(body).toMatchObject({ model: 'gpt-image-2.6-flare', output_format: 'svg', complexity: 'medium', svg: { model: 'gpt-6.1-sol' } })

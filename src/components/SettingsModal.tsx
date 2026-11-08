@@ -78,14 +78,6 @@ const SIZE_OPTIONS = [
   { label: '1536×1024 (横)', value: '1536x1024' },
   { label: '1024×1536 (竖)', value: '1024x1536' },
 ]
-const QUALITY_OPTIONS = [
-  { label: '自动', value: 'auto' },
-  { label: '低', value: 'low' },
-  { label: '中', value: 'medium' },
-  { label: '高', value: 'high' },
-  { label: '超高', value: 'xhigh' },
-  { label: '最高', value: 'max' },
-]
 const FORMAT_OPTIONS = [
   { label: 'PNG', value: 'png' },
   { label: 'JPEG', value: 'jpeg' },
@@ -93,11 +85,6 @@ const FORMAT_OPTIONS = [
   { label: 'SVG', value: 'svg' },
   { label: 'GIF', value: 'gif' },
 ]
-const MODERATION_OPTIONS = [
-  { label: '自动', value: 'auto' },
-  { label: '宽松', value: 'low' },
-]
-
 function newId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
 }
@@ -714,16 +701,16 @@ export default function SettingsModal() {
                     <span className={labelCls}>默认尺寸</span>
                     <Select value={params.size} onChange={(v) => setParams({ size: v })} options={SIZE_OPTIONS} className={fieldCls} />
                   </label>
-                  <label className="block">
-                    <span className={labelCls}>默认质量</span>
-                    <Select value={params.quality} onChange={(v) => setParams({ quality: v as any })} options={QUALITY_OPTIONS.map((option) => ({ ...option, disabledReason: option.value === 'xhigh' || option.value === 'max' ? paramDisabled.extendedQuality : undefined }))} className={fieldCls} />
-                  </label>
+                  {!paramDisabled.complexity && <label className="block">
+                    <span className={labelCls}>复杂度</span>
+                    <Select value={params.complexity} onChange={(v) => setParams({ complexity: v as typeof params.complexity })} options={[{ label: '自动', value: 'auto' }, { label: '低', value: 'low' }, { label: '中', value: 'medium' }, { label: '高', value: 'high' }]} className={fieldCls} />
+                  </label>}
                   <label className="block">
                     <span className={labelCls}>输出格式</span>
                     <Select value={params.output_format} onChange={(v) => setParams({ output_format: v as any })} options={FORMAT_OPTIONS.map((option) => ({ ...option, disabledReason: option.value === 'svg' ? paramDisabled.svg : option.value === 'gif' ? paramDisabled.gif : undefined }))} className={fieldCls} />
                   </label>
                   <label className="block">
-                    <span className={labelCls}>压缩质量</span>
+                    <span className={labelCls}>压缩率</span>
                     <input
                       type="number"
                       min={0}
@@ -739,10 +726,6 @@ export default function SettingsModal() {
                     />
                   </label>
                   <label className="block">
-                    <span className={labelCls}>安全审核</span>
-                    <Select value={params.moderation} onChange={(v) => setParams({ moderation: v as any })} options={MODERATION_OPTIONS} className={fieldCls} />
-                  </label>
-                  <label className="block">
                     <span className={labelCls}>默认数量</span>
                     <input
                       type="number"
@@ -753,10 +736,6 @@ export default function SettingsModal() {
                       className={fieldCls}
                     />
                   </label>
-                  {!paramDisabled.complexity && <label className="block">
-                    <span className={labelCls}>复杂度</span>
-                    <Select value={params.complexity} onChange={(v) => setParams({ complexity: v as typeof params.complexity })} options={[{ label: '自动', value: 'auto' }, { label: '低', value: 'low' }, { label: '中', value: 'medium' }, { label: '高', value: 'high' }]} className={fieldCls} />
-                  </label>}
                   <label className="block">
                     <span className={labelCls}>默认模型（{providerLabel(activeProfile.provider)}）</span>
                     <Select value={getActiveApiProfile(draft).model} onChange={(value) => updateActiveProfile({ model: configuredModels.includes(value) ? activeProfile.model : [...configuredModels, value].join(', '), selectedModel: value }, true)} options={modelOptions.map((model) => ({ label: model, value: model }))} className={fieldCls} />

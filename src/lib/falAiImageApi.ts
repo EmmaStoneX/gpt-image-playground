@@ -32,10 +32,6 @@ async function mapFalImageSize(size: string): Promise<{ width: number; height: n
   return DEFAULT_FAL_IMAGE_SIZE
 }
 
-function mapFalQuality(quality: TaskParams['quality']): 'low' | 'medium' | 'high' {
-  return quality === 'auto' || quality === 'xhigh' || quality === 'max' ? 'high' : quality
-}
-
 function configureFal(profile: ApiProfile) {
   fal.config({
     credentials: profile.apiKey,
@@ -48,7 +44,6 @@ async function createFalRequestInput(opts: CallApiOptions, profile: ApiProfile):
   const input: Record<string, unknown> = {
     prompt: opts.prompt,
     image_size: await mapFalImageSize(opts.params.size),
-    quality: mapFalQuality(opts.params.quality),
     num_images: Math.min(4, Math.max(1, opts.params.n || 1)),
     output_format: opts.params.output_format,
   }
@@ -186,7 +181,6 @@ export async function callFalAiImageApi(opts: CallApiOptions, profile: ApiProfil
     const actualFalSize = await mapFalImageSize(opts.params.size)
     const actualParams = mergeActualParams({
       size: `${actualFalSize.width}x${actualFalSize.height}`,
-      quality: mapFalQuality(opts.params.quality),
       output_format: opts.params.output_format,
       n: images.length,
     })
