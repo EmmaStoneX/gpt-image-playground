@@ -95,7 +95,7 @@ export default function HelpModal({ onClose }: HelpModalProps) {
             icon={<svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>}
           >
             <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-300">
-              配置 OpenAI 兼容接口的地址和密钥后，会自动获取上游模型列表；Images 接口只展示生图模型，可在设置或输入栏的「模型」下拉菜单中切换。尺寸、格式可在输入栏高级参数中调整；JPEG 和 WebP 可调压缩率，GIF 可调帧数和帧间隔。复杂度只在支持的模型下显示，SVG 和 GIF 只在支持的模型下可选。每条提示词生成 1 张图，批量模式可分别提交多条提示词。
+              配置 OpenAI 兼容接口的地址和密钥后，会自动获取上游模型列表；Images 接口只展示生图模型。点击输入栏的高级参数按钮，可在面板内切换模型、调整尺寸和格式；也可在设置中切换模型。JPEG 和 WebP 可调压缩率，GIF 可调帧数和帧间隔。复杂度只在支持的模型下显示，SVG 和 GIF 只在支持的模型下可选。每条提示词生成 1 张图，批量模式可分别提交多条提示词。
             </p>
           </SectionCard>
 
