@@ -19,6 +19,7 @@ import type { ApiProfile, AppSettings } from '../types'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { useVersionCheck } from '../hooks/useVersionCheck'
 import { useUpstreamModels } from '../hooks/useUpstreamModels'
+import { filterImageModelIds } from '../lib/upstreamModels'
 import Select from './Select'
 import { getParamDisabledReasons } from '../lib/paramCompatibility'
 
@@ -118,6 +119,7 @@ export default function SettingsModal() {
   const [showApiKey, setShowApiKey] = useState(false)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [modelIdInput, setModelIdInput] = useState('')
+  const [manualModelInput, setManualModelInput] = useState(false)
   const [tab, setTab] = useState<SettingsTab>('api')
   const params = useStore((s) => s.params)
   const setParams = useStore((s) => s.setParams)
@@ -128,7 +130,11 @@ export default function SettingsModal() {
   const activeProfile = draft.profiles.find((profile) => profile.id === draft.activeProfileId) ?? draft.profiles[0] ?? getActiveApiProfile(draft)
   const { models: upstreamModels, loading: modelsLoading, error: modelsError, reload: reloadModels } = useUpstreamModels(activeProfile, showSettings)
   const configuredModels = splitModelList(activeProfile.model)
-  const modelOptions = Array.from(new Set([...configuredModels, ...upstreamModels]))
+  const availableModels = activeProfile.provider === 'openai' && activeProfile.apiMode === 'images'
+    ? filterImageModelIds([...configuredModels, ...upstreamModels])
+    : [...configuredModels, ...upstreamModels]
+  const selectedModel = getActiveApiProfile(draft).model
+  const modelOptions = Array.from(new Set([selectedModel, ...availableModels]))
   const apiProxyEnabled = apiProxyAvailable && activeProfile.provider === 'openai' && activeProfile.apiProxy
   const paramDisabled = getParamDisabledReasons(settings)
 
@@ -160,6 +166,8 @@ export default function SettingsModal() {
   useEffect(() => {
     setModelIdInput(getActiveApiProfile(draft).model)
   }, [showSettings, activeProfile.id, activeProfile.model, activeProfile.selectedModel])
+
+  useEffect(() => setManualModelInput(false), [activeProfile.id, activeProfile.provider, showSettings])
 
   const commitSettings = (nextDraft: AppSettings) => {
     const normalizedProfiles = nextDraft.profiles.map((profile) => {
@@ -643,9 +651,22 @@ export default function SettingsModal() {
                   <div className={`block min-w-0 ${activeProfile.provider !== 'openai' ? 'col-span-2' : ''}`}>
                     <div className="flex items-center justify-between">
                       <span className={labelCls}>模型 ID</span>
-                      {activeProfile.provider === 'openai' && <button type="button" onClick={reloadModels} disabled={!activeProfile.apiKey.trim() || modelsLoading} className="text-[10px] text-blue-500 disabled:text-gray-400">{modelsLoading ? '获取中…' : '刷新列表'}</button>}
+                      {activeProfile.provider === 'openai' && <div className="flex gap-2.5">
+                        <button type="button" onClick={() => setManualModelInput((current) => !current)} className="text-[10px] text-blue-500">{manualModelInput ? '返回列表' : '手动输入'}</button>
+                        <button type="button" onClick={reloadModels} disabled={!activeProfile.apiKey.trim() || modelsLoading} className="text-[10px] text-blue-500 disabled:text-gray-400">{modelsLoading ? '获取中…' : '刷新列表'}</button>
+                      </div>}
                     </div>
-                    <input
+                    {activeProfile.provider === 'openai' && !manualModelInput ? (
+                      <Select
+                        value={selectedModel}
+                        onChange={(model: string) => updateActiveProfile({
+                          model: configuredModels.includes(model) ? activeProfile.model : [...configuredModels, model].join(', '),
+                          selectedModel: model,
+                        }, true)}
+                        options={modelOptions.map((model) => ({ label: model, value: model }))}
+                        className={fieldCls}
+                      />
+                    ) : <input
                       value={modelIdInput}
                       onChange={(e) => setModelIdInput(e.target.value)}
                       onBlur={(e) => {
@@ -658,14 +679,12 @@ export default function SettingsModal() {
                       }}
                       onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
                       type="text"
-                      list={activeProfile.provider === 'openai' ? 'upstream-model-ids' : undefined}
                       placeholder={activeProfile.provider === 'fal' ? DEFAULT_FAL_MODEL : getDefaultModelForMode(apiMode)}
                       className={fieldCls}
-                    />
+                    />}
                     {activeProfile.provider === 'openai' && <>
-                      <datalist id="upstream-model-ids">{upstreamModels.map((model) => <option key={model} value={model} />)}</datalist>
                       <div className="mt-0.5 text-[10px] leading-tight text-gray-400 dark:text-gray-500" aria-live="polite">
-                        {modelsError || (upstreamModels.length ? `已从上游获取 ${upstreamModels.length} 个模型，可输入筛选` : modelsLoading ? '正在获取上游模型…' : activeProfile.apiKey.trim() ? '可手动输入模型 ID' : '填写 API 密钥后自动获取模型')}
+                        {modelsError || (upstreamModels.length ? `已从上游获取 ${activeProfile.apiMode === 'images' ? filterImageModelIds(upstreamModels).length + ' 个生图模型' : upstreamModels.length + ' 个模型'}` : modelsLoading ? '正在获取上游模型…' : activeProfile.apiKey.trim() ? '可手动输入模型 ID' : '填写 API 密钥后自动获取模型')}
                       </div>
                     </>}
                   </div>

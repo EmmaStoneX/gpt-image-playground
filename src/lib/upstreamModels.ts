@@ -1,6 +1,12 @@
 import type { ApiProfile } from '../types'
 import { buildApiUrl, isApiProxyAvailable, readClientDevProxyConfig } from './devProxy'
 
+const IMAGE_MODEL_ID = /(?:^|[\/_-])(?:gpt-image|image|imagen|dall-e|flux|ideogram|recraft|stable-diffusion|sdxl|seedream|nano-banana)(?:$|[\/_.-])/i
+
+export function filterImageModelIds(models: string[]): string[] {
+  return models.filter((model) => IMAGE_MODEL_ID.test(model))
+}
+
 export function parseUpstreamModels(payload: unknown): string[] {
   if (!payload || typeof payload !== 'object' || !Array.isArray((payload as { data?: unknown }).data)) {
     throw new Error('模型列表格式无效')

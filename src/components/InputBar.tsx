@@ -4,6 +4,7 @@ import { useStore, submitTask, stopBatchPrompts, addImageFromFile, getCachedImag
 import { DEFAULT_PARAMS } from '../types'
 import { getActiveApiProfile, splitModelList } from '../lib/apiProfiles'
 import { useUpstreamModels } from '../hooks/useUpstreamModels'
+import { filterImageModelIds } from '../lib/upstreamModels'
 import { DEFAULT_FAL_IMAGE_SIZE, getChangedParams, getOutputImageLimitForSettings, getParamDisabledReasons, normalizeParamsForSettings } from '../lib/paramCompatibility'
 import { normalizeImageSize } from '../lib/size'
 import { createMaskPreviewDataUrl } from '../lib/canvasImage'
@@ -166,7 +167,10 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
   const activeProfile = getActiveApiProfile(settings)
   const configuredModels = splitModelList(settings.profiles.find((profile) => profile.id === settings.activeProfileId)?.model ?? activeProfile.model)
   const { models: upstreamModels } = useUpstreamModels(activeProfile)
-  const modelOptions = Array.from(new Set([...configuredModels, ...upstreamModels]))
+  const discoveredModels = activeProfile.provider === 'openai' && activeProfile.apiMode === 'images'
+    ? filterImageModelIds([...configuredModels, ...upstreamModels])
+    : [...configuredModels, ...upstreamModels]
+  const modelOptions = Array.from(new Set([activeProfile.model, ...discoveredModels]))
   const activeProvider = activeProfile.provider
   const isFalProvider = activeProvider === 'fal'
   const paramDisabled = getParamDisabledReasons(settings)

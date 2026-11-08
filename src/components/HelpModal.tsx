@@ -95,7 +95,7 @@ export default function HelpModal({ onClose }: HelpModalProps) {
             icon={<svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>}
           >
             <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-300">
-              配置 OpenAI 兼容接口的地址和密钥后，会自动获取上游模型列表，可在输入栏的「模型」中切换；设置中的「模型 ID」支持输入筛选、刷新列表，也可以手动填写，多个 ID 用逗号分隔。尺寸、质量和格式可在输入栏高级参数中调整，SVG、GIF 与复杂度只在支持的模型下可用。
+              配置 OpenAI 兼容接口的地址和密钥后，会自动获取上游模型列表；Images 接口只展示生图模型，可在设置或输入栏的「模型」下拉菜单中切换。自定义模型可在设置中手动输入，多个 ID 用逗号分隔。尺寸、质量和格式可在输入栏高级参数中调整，SVG、GIF 与复杂度只在支持的模型下可用。
             </p>
           </SectionCard>
 

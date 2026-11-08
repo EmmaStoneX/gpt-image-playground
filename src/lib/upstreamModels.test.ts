@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultOpenAIProfile } from './apiProfiles'
 import { resolveApiProfileModel } from './imageModels'
-import { fetchUpstreamModels, parseUpstreamModels } from './upstreamModels'
+import { fetchUpstreamModels, filterImageModelIds, parseUpstreamModels } from './upstreamModels'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -11,6 +11,12 @@ describe('上游模型列表', () => {
       { id: 'gpt-image-2' }, { id: ' custom-image ' }, { id: 'gpt-image-2' }, { name: 'missing' }, null,
     ] })).toEqual(['gpt-image-2', 'custom-image'])
     expect(() => parseUpstreamModels({ error: 'unauthorized' })).toThrow('模型列表格式无效')
+  })
+
+  it('Images 接口只显示生图模型', () => {
+    expect(filterImageModelIds([
+      'gpt-5.5', 'gpt-image-2.5', 'gemini-3.1-flash-image', 'flux.1-pro', 'claude-sonnet-5',
+    ])).toEqual(['gpt-image-2.5', 'gemini-3.1-flash-image', 'flux.1-pro'])
   })
 
   it('从已配置的中转站读取模型，并使用对应密钥', async () => {
