@@ -5,7 +5,7 @@ import { DEFAULT_PARAMS } from '../types'
 import { getActiveApiProfile, splitModelList } from '../lib/apiProfiles'
 import { useUpstreamModels } from '../hooks/useUpstreamModels'
 import { filterImageModelIds } from '../lib/upstreamModels'
-import { DEFAULT_FAL_IMAGE_SIZE, getChangedParams, getOutputImageLimitForSettings, getParamDisabledReasons, normalizeParamsForSettings } from '../lib/paramCompatibility'
+import { DEFAULT_FAL_IMAGE_SIZE, getChangedParams, getParamDisabledReasons, normalizeParamsForSettings } from '../lib/paramCompatibility'
 import { normalizeImageSize } from '../lib/size'
 import { createMaskPreviewDataUrl } from '../lib/canvasImage'
 import { splitBatchPrompts } from '../lib/batchPrompts'
@@ -126,7 +126,6 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
   const [isDragging, setIsDragging] = useState(false)
   const [submitHover, setSubmitHover] = useState(false)
   const [attachHover, setAttachHover] = useState(false)
-  const [compressionHintVisible, setCompressionHintVisible] = useState(false)
   const [sizeHintVisible, setSizeHintVisible] = useState(false)
   const [imageHintId, setImageHintId] = useState<string | null>(null)
   const [mobileCollapsed, setMobileCollapsed] = useState(false)
@@ -145,16 +144,11 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
   const imageDragPreviewRef = useRef<HTMLElement | null>(null)
   const suppressImageClickRef = useRef(false)
   const maskConflictNoticeShownRef = useRef(false)
-  const compressionHintTimerRef = useRef<number | null>(null)
   const sizeHintTimerRef = useRef<number | null>(null)
   const imageHintTimerRef = useRef<number | null>(null)
-  const nLimitHintTimerRef = useRef<number | null>(null)
   const [outputCompressionInput, setOutputCompressionInput] = useState(
     params.output_compression == null ? '' : String(params.output_compression),
   )
-  const [nInput, setNInput] = useState(String(params.n))
-  const [nInputFocused, setNInputFocused] = useState(false)
-  const [nLimitHintVisible, setNLimitHintVisible] = useState(false)
   const dragCounter = useRef(0)
   const isMobile = useIsMobile()
 
@@ -170,11 +164,10 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
   const activeProvider = activeProfile.provider
   const isFalProvider = activeProvider === 'fal'
   const paramDisabled = getParamDisabledReasons(settings)
-  const compressionDisabled = params.output_format === 'png' || params.output_format === 'svg' || params.output_format === 'gif' || isFalProvider
-  const outputImageLimit = getOutputImageLimitForSettings(settings)
-  const nLimitHintText = isFalProvider
-    ? `fal.ai 最大请求数量为 ${outputImageLimit}`
-    : `OpenAI 最大请求数量为 ${outputImageLimit}`
+  const showCompression = !isFalProvider && (params.output_format === 'jpeg' || params.output_format === 'webp')
+  const showGifParams = params.output_format === 'gif'
+  const paramCount = 2 + Number(!paramDisabled.complexity) + Number(showCompression) + (showGifParams ? 2 : 0)
+  const paramCols = paramCount === 5 ? 'sm:grid-cols-5' : paramCount === 4 ? 'sm:grid-cols-4' : paramCount === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'
   const displaySize = isFalProvider && params.size === 'auto'
     ? DEFAULT_FAL_IMAGE_SIZE
     : normalizeImageSize(params.size) || DEFAULT_PARAMS.size
@@ -193,10 +186,6 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
   }, [params.output_compression])
 
   useEffect(() => {
-    setNInput(String(params.n))
-  }, [params.n])
-
-  useEffect(() => {
     const normalizedParams = normalizeParamsForSettings(params, settings)
     const patch = getChangedParams(params, normalizedParams)
     if (Object.keys(patch).length) {
@@ -205,17 +194,11 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
   }, [params, settings, setParams])
 
   useEffect(() => () => {
-    if (compressionHintTimerRef.current != null) {
-      window.clearTimeout(compressionHintTimerRef.current)
-    }
     if (sizeHintTimerRef.current != null) {
       window.clearTimeout(sizeHintTimerRef.current)
     }
     if (imageHintTimerRef.current != null) {
       window.clearTimeout(imageHintTimerRef.current)
-    }
-    if (nLimitHintTimerRef.current != null) {
-      window.clearTimeout(nLimitHintTimerRef.current)
     }
   }, [])
 
@@ -255,79 +238,6 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
     setOutputCompressionInput(String(nextValue))
     setParams({ output_compression: nextValue })
   }, [outputCompressionInput, params.output_compression, setParams])
-
-  const commitN = useCallback(() => {
-    setNLimitHintVisible(false)
-    if (nLimitHintTimerRef.current != null) {
-      window.clearTimeout(nLimitHintTimerRef.current)
-      nLimitHintTimerRef.current = null
-    }
-    const nextValue = Number(nInput)
-    const normalizedValue =
-      nInput.trim() === '' ? DEFAULT_PARAMS.n : Number.isNaN(nextValue) ? params.n : nextValue
-    const clampedValue = Math.min(outputImageLimit, Math.max(1, normalizedValue))
-    setNInput(String(clampedValue))
-    setParams({ n: clampedValue })
-  }, [nInput, outputImageLimit, params.n, setParams])
-
-  const showNLimitHint = useCallback(() => {
-    setNLimitHintVisible(true)
-    if (nLimitHintTimerRef.current != null) {
-      window.clearTimeout(nLimitHintTimerRef.current)
-    }
-    nLimitHintTimerRef.current = window.setTimeout(() => {
-      setNLimitHintVisible(false)
-      nLimitHintTimerRef.current = null
-    }, 2000)
-  }, [])
-
-  const hideNLimitHint = useCallback(() => {
-    setNLimitHintVisible(false)
-    if (nLimitHintTimerRef.current != null) {
-      window.clearTimeout(nLimitHintTimerRef.current)
-      nLimitHintTimerRef.current = null
-    }
-  }, [])
-
-  const handleNInputChange = useCallback((value: string) => {
-    setNInput(value)
-    const nextValue = Number(value)
-    if (!Number.isNaN(nextValue) && nextValue > outputImageLimit) {
-      showNLimitHint()
-    } else {
-      hideNLimitHint()
-    }
-  }, [hideNLimitHint, outputImageLimit, showNLimitHint])
-
-  const handleNLimitIncreaseAttempt = useCallback((preventDefault: () => void) => {
-    const currentValue = Number(nInput)
-    const effectiveValue = Number.isNaN(currentValue) ? params.n : currentValue
-    if (!nInputFocused || effectiveValue < outputImageLimit) return
-
-    preventDefault()
-    showNLimitHint()
-  }, [nInput, nInputFocused, outputImageLimit, params.n, showNLimitHint])
-
-  const showCompressionHint = () => setCompressionHintVisible(true)
-
-  const hideCompressionHint = () => {
-    setCompressionHintVisible(false)
-    clearCompressionHintTimer()
-  }
-
-  const clearCompressionHintTimer = () => {
-    if (compressionHintTimerRef.current != null) {
-      window.clearTimeout(compressionHintTimerRef.current)
-      compressionHintTimerRef.current = null
-    }
-  }
-
-  const startCompressionHintTouch = () => {
-    compressionHintTimerRef.current = window.setTimeout(() => {
-      setCompressionHintVisible(true)
-      compressionHintTimerRef.current = null
-    }, 450)
-  }
 
   const showSizeHint = () => {
     if (isFalProvider) setSizeHintVisible(true)
@@ -927,63 +837,23 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
           className={selectClass}
         />
       </label>
-      <label
-        className="relative flex flex-col gap-0.5"
-        onMouseEnter={showCompressionHint}
-        onMouseLeave={hideCompressionHint}
-        onTouchStart={startCompressionHintTouch}
-        onTouchEnd={clearCompressionHintTimer}
-        onTouchCancel={hideCompressionHint}
-        onClick={showCompressionHint}
-      >
+      {showCompression && <label className="relative flex flex-col gap-0.5">
         <span className="text-gray-400 dark:text-gray-500 ml-1">压缩率</span>
         <input
           value={outputCompressionInput}
           onChange={(e) => setOutputCompressionInput(e.target.value)}
           onBlur={commitOutputCompression}
-          disabled={compressionDisabled}
           type="number"
           min={0}
           max={100}
           placeholder="0-100"
-          className={`px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] focus:outline-none text-xs transition-all duration-200 shadow-sm ${
-            compressionDisabled
-              ? 'bg-gray-100/50 dark:bg-white/[0.05] opacity-50 cursor-not-allowed'
-              : 'bg-white/50 dark:bg-white/[0.03]'
-            }`}
+          className="px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] focus:outline-none text-xs transition-all duration-200 shadow-sm bg-white/50 dark:bg-white/[0.03]"
         />
-        <ButtonTooltip
-          visible={compressionHintVisible}
-          text={isFalProvider ? 'fal.ai 不支持压缩率参数' : '仅 JPEG 和 WebP 支持压缩率'}
-        />
-      </label>
-      <label className="relative flex flex-col gap-0.5">
-        <span className="text-gray-400 dark:text-gray-500 ml-1">数量</span>
-        <input
-          value={nInput}
-          onChange={(e) => handleNInputChange(e.target.value)}
-          onFocus={() => setNInputFocused(true)}
-          onBlur={() => {
-            setNInputFocused(false)
-            commitN()
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'ArrowUp') {
-              handleNLimitIncreaseAttempt(() => e.preventDefault())
-            }
-          }}
-          onWheel={(e) => {
-            if (e.deltaY < 0) {
-              handleNLimitIncreaseAttempt(() => e.preventDefault())
-            }
-          }}
-          type="number"
-          min={1}
-          max={outputImageLimit}
-          className="px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] bg-white/50 dark:bg-white/[0.03] focus:outline-none text-xs transition-all duration-200 shadow-sm"
-        />
-        <ButtonTooltip visible={nLimitHintVisible} text={nLimitHintText} />
-      </label>
+      </label>}
+      {showGifParams && <>
+        <label className="flex flex-col gap-0.5"><span className="text-gray-400 dark:text-gray-500 ml-1">帧数</span><input type="number" min={2} max={16} value={params.frame_count} onChange={(e) => setParams({ frame_count: Number(e.target.value) })} className="min-w-0 rounded-xl border border-gray-200/60 bg-white/50 px-3 py-1.5 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.03]" /></label>
+        <label className="flex flex-col gap-0.5"><span className="text-gray-400 dark:text-gray-500 ml-1">帧间隔 ms</span><input type="number" min={20} max={2000} value={params.frame_duration_ms} onChange={(e) => setParams({ frame_duration_ms: Number(e.target.value) })} className="min-w-0 rounded-xl border border-gray-200/60 bg-white/50 px-3 py-1.5 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.03]" /></label>
+      </>}
     </div>
   )
 
@@ -1165,13 +1035,7 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
           {/* 高级参数抽屉 */}
           <div className={`collapse-section${showAdvanced ? '' : ' collapsed'}`}>
             <div className="collapse-inner px-1 pt-1">
-              {renderParams(paramDisabled.complexity ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2 sm:grid-cols-5')}
-              <div className="mt-2 flex flex-wrap items-end gap-2 text-xs">
-                {params.output_format === 'gif' && <>
-                  <label className="flex flex-col gap-0.5"><span className="text-gray-400">帧数</span><input type="number" min={2} max={16} value={params.frame_count} onChange={(e) => setParams({ frame_count: Number(e.target.value) })} className="w-20 rounded-xl border border-gray-200 bg-transparent px-3 py-1.5 dark:border-white/10" /></label>
-                  <label className="flex flex-col gap-0.5"><span className="text-gray-400">帧间隔 ms</span><input type="number" min={20} max={2000} value={params.frame_duration_ms} onChange={(e) => setParams({ frame_duration_ms: Number(e.target.value) })} className="w-28 rounded-xl border border-gray-200 bg-transparent px-3 py-1.5 dark:border-white/10" /></label>
-                </>}
-              </div>
+              {renderParams(`grid-cols-2 ${paramCols}`)}
               <div className="h-2" />
             </div>
           </div>

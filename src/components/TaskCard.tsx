@@ -181,7 +181,7 @@ export default function TaskCard({
   const dim = coverSize.match(/(\d+)[×x](\d+)/)
   const aspectRatio = task.status === 'done' && dim ? `${dim[1]} / ${dim[2]}` : '4 / 5'
 
-  const actionBtn = 'flex items-center justify-center w-8 h-8 rounded-lg bg-black/35 text-white backdrop-blur-sm hover:bg-black/55 transition'
+  const actionBtn = 'flex items-center justify-center w-8 h-8 rounded-lg bg-black/35 text-white hover:bg-black/55 transition'
 
   return (
     <div className="relative rounded-xl">
@@ -203,14 +203,14 @@ export default function TaskCard({
       </div>
 
       <div
-        className={`relative rounded-xl border overflow-hidden cursor-pointer group bg-gray-100 dark:bg-white/[0.03] duration-200 ${
+        className={`relative isolate rounded-xl border overflow-hidden cursor-pointer group bg-gray-100 dark:bg-white/[0.03] duration-200 ${
           !isSwiping ? 'transition-[box-shadow,border-color,background-color,transform]' : 'transition-[box-shadow,border-color,background-color]'
         } ${
           task.status === 'running'
             ? 'border-blue-400 generating'
             : isSelected
             ? 'border-blue-500 shadow-md ring-2 ring-blue-500/50'
-            : 'border-gray-200 dark:border-white/[0.08] hover:border-gray-300 dark:hover:border-white/20 hover:shadow-lg'
+            : 'border-gray-200 dark:border-white/[0.08] hover:border-gray-300 dark:hover:border-white/20'
         }`}
         style={{
           transform: swipeOffset ? `translateX(${swipeOffset}px)` : undefined,
@@ -233,23 +233,23 @@ export default function TaskCard({
         {task.status === 'done' && thumbSrc && (
           <MobileSafeImage
             src={thumbSrc}
-            className="saveable-image absolute inset-0 w-full h-full object-cover"
+            className="saveable-image relative z-0 w-full h-full object-cover"
             loading="lazy"
             alt=""
           />
         )}
         {task.status === 'running' && streamPreview && (
-          <MobileSafeImage src={streamPreview} className="absolute inset-0 h-full w-full object-cover opacity-75" alt="流式预览" />
+          <MobileSafeImage src={streamPreview} className="relative z-0 h-full w-full object-cover opacity-75" alt="流式预览" />
         )}
         {task.status === 'done' && !thumbSrc && (
-          <div className="absolute inset-0 flex items-center justify-center">
+          <div className="relative z-0 flex h-full w-full items-center justify-center">
             <svg className="w-9 h-9 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </div>
         )}
         {task.status === 'running' && (
-          <div className={`absolute inset-0 flex flex-col items-center justify-center gap-2 ${streamPreview ? 'bg-black/20 text-white' : ''}`}>
+          <div className={`${streamPreview ? 'absolute inset-0 bg-black/20 text-white' : 'relative h-full w-full'} z-0 flex flex-col items-center justify-center gap-2`}>
             <svg className="w-8 h-8 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -258,7 +258,7 @@ export default function TaskCard({
           </div>
         )}
         {task.status === 'error' && isFalReconnecting && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 px-3">
+          <div className="relative z-0 flex h-full w-full flex-col items-center justify-center gap-1.5 px-3">
             <svg className="w-7 h-7 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
@@ -273,7 +273,7 @@ export default function TaskCard({
           </div>
         )}
         {task.status === 'error' && !isFalReconnecting && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3">
+          <div className="relative z-0 flex h-full w-full flex-col items-center justify-center gap-2 px-3">
             <svg className="w-7 h-7 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -304,9 +304,9 @@ export default function TaskCard({
         )}
 
         {/* 顶部左：比例/分辨率 或 计时 + 数量 */}
-        <div className="absolute top-2 left-2 flex items-center gap-1 pointer-events-none">
+        <div className="absolute top-2 left-2 z-10 flex items-center gap-1 pointer-events-none">
           {showRunningTimer || task.status !== 'done' || !coverRatio || !coverSize ? (
-            <span className="flex items-center gap-1 bg-black/50 text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm font-mono">
+            <span className="flex items-center gap-1 bg-black/50 text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded font-mono">
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -314,16 +314,16 @@ export default function TaskCard({
             </span>
           ) : (
             <>
-              <span className="bg-black/50 text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm font-mono">
+              <span className="bg-black/50 text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded font-mono">
                 {coverRatio}
               </span>
-              <span className="hidden sm:inline bg-black/50 text-white/90 text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm font-medium">
+              <span className="hidden sm:inline bg-black/50 text-white/90 text-[10px] sm:text-xs px-1.5 py-0.5 rounded font-medium">
                 {coverSize}
               </span>
             </>
           )}
           {task.status === 'done' && task.outputImages.length > 1 && (
-            <span className="flex items-center gap-0.5 bg-black/50 text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm font-medium">
+            <span className="flex items-center gap-0.5 bg-black/50 text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded font-medium">
               <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <rect x="3" y="3" width="14" height="14" rx="2" />
                 <path d="M7 21h12a2 2 0 002-2V9" />
@@ -332,7 +332,7 @@ export default function TaskCard({
             </span>
           )}
           {task.maskImageId && (
-            <span className="bg-blue-500/90 text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm font-medium tracking-wide">
+            <span className="bg-blue-500/90 text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded font-medium tracking-wide">
               MASK
             </span>
           )}
@@ -340,7 +340,7 @@ export default function TaskCard({
 
         {/* 顶部右：选中标记 / 收藏 */}
         {isSelected ? (
-          <div className="absolute top-2 right-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center shadow-sm pointer-events-none">
+          <div className="absolute top-2 right-2 z-10 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center shadow-sm pointer-events-none">
             <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
             </svg>
@@ -348,7 +348,7 @@ export default function TaskCard({
         ) : (
           <button
             onClick={(e) => { e.stopPropagation(); updateTaskInStore(task.id, { isFavorite: !task.isFavorite }) }}
-            className={`absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full backdrop-blur-sm transition ${
+            className={`absolute top-2 right-2 z-10 w-7 h-7 flex items-center justify-center rounded-full transition ${
               task.isFavorite
                 ? 'bg-black/35 text-yellow-400 opacity-100'
                 : 'bg-black/35 text-white opacity-0 group-hover:opacity-100 hover:text-yellow-300'
@@ -363,7 +363,7 @@ export default function TaskCard({
 
         {/* 底部：提示词 + 操作（悬停浮现，仅完成态） */}
         {task.status === 'done' && (
-          <div className="absolute inset-x-0 bottom-0 px-2.5 pb-2.5 pt-10 bg-gradient-to-t from-black/80 via-black/35 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <div className="absolute inset-x-0 bottom-0 z-10 px-2.5 pb-2.5 pt-10 bg-gradient-to-t from-black/80 via-black/35 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             <p className="text-white text-xs leading-snug line-clamp-2 mb-2 drop-shadow">
               {task.prompt || '(无提示词)'}
             </p>

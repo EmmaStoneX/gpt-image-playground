@@ -690,7 +690,7 @@ export async function submitTask(options: { allowFullMask?: boolean } = {}) {
     return
   }
 
-  const normalizedParams = normalizeParamsForSettings(params, settings)
+  const normalizedParams = { ...normalizeParamsForSettings(params, settings), n: 1 }
   const normalizedParamPatch = getChangedParams(params, normalizedParams)
   if (Object.keys(normalizedParamPatch).length) {
     useStore.getState().setParams(normalizedParamPatch)
@@ -972,7 +972,7 @@ export async function retryTask(task: TaskRecord, mode: RetryMode = 'new') {
   if (!current || current.status === 'running' || current.falRecoverable) return
   if (mode === 'overwriteFailed' && current.status !== 'error') return
   const activeProfile = getActiveApiProfile(settings)
-  const normalizedParams = normalizeParamsForSettings(current.params, settings)
+  const normalizedParams = { ...normalizeParamsForSettings(current.params, settings), n: mode === 'new' ? 1 : current.params.n }
   const taskId = mode === 'new' ? genId() : current.id
   const oldOutputIds = mode === 'new' ? [] : current.outputImages
   const newTask: TaskRecord = {
@@ -1029,7 +1029,7 @@ export async function retryTasks(tasks: TaskRecord[], mode: RetryMode, limit = 2
 export async function reuseConfig(task: TaskRecord) {
   const { settings, setPrompt, setParams, setInputImages, setMaskDraft, clearMaskDraft, showToast } = useStore.getState()
   setPrompt(task.prompt)
-  setParams(normalizeParamsForSettings(task.params, settings))
+  setParams({ ...normalizeParamsForSettings(task.params, settings), n: 1 })
 
   // 恢复输入图片
   const imgs: InputImage[] = []

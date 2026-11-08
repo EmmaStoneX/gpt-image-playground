@@ -709,33 +709,21 @@ export default function SettingsModal() {
                     <span className={labelCls}>输出格式</span>
                     <Select value={params.output_format} onChange={(v) => setParams({ output_format: v as any })} options={FORMAT_OPTIONS.map((option) => ({ ...option, disabledReason: option.value === 'svg' ? paramDisabled.svg : option.value === 'gif' ? paramDisabled.gif : undefined }))} className={fieldCls} />
                   </label>
-                  <label className="block">
+                  {activeProfile.provider !== 'fal' && (params.output_format === 'jpeg' || params.output_format === 'webp') && <label className="block">
                     <span className={labelCls}>压缩率</span>
                     <input
                       type="number"
                       min={0}
                       max={100}
-                      disabled={params.output_format === 'png'}
                       value={params.output_compression ?? ''}
-                      placeholder={params.output_format === 'png' ? '不适用' : '自动'}
+                      placeholder="自动"
                       onChange={(e) => {
                         const v = e.target.value.trim()
                         setParams({ output_compression: v === '' ? null : Math.max(0, Math.min(100, Number(v) || 0)) })
                       }}
-                      className={`${fieldCls} ${params.output_format === 'png' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    />
-                  </label>
-                  <label className="block">
-                    <span className={labelCls}>默认数量</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={10}
-                      value={params.n}
-                      onChange={(e) => setParams({ n: Math.max(1, Math.min(10, Number(e.target.value) || 1)) })}
                       className={fieldCls}
                     />
-                  </label>
+                  </label>}
                   <label className="block">
                     <span className={labelCls}>默认模型（{providerLabel(activeProfile.provider)}）</span>
                     <Select value={getActiveApiProfile(draft).model} onChange={(value) => updateActiveProfile({ model: configuredModels.includes(value) ? activeProfile.model : [...configuredModels, value].join(', '), selectedModel: value }, true)} options={modelOptions.map((model) => ({ label: model, value: model }))} className={fieldCls} />
@@ -746,10 +734,10 @@ export default function SettingsModal() {
                   {activeProfile.provider === 'openai' && <label className="block min-w-0"><span className={labelCls}>SVG 编写模型 ID</span>
                     <input value={activeProfile.svgModel ?? ''} onChange={(e) => updateActiveProfile({ svgModel: e.target.value })} onBlur={(e) => commitActiveProfilePatch({ svgModel: e.target.value })} placeholder="gpt-6.1-sol" className={fieldCls} />
                   </label>}
-                  {params.output_format === 'gif' && <>
-                    <label className="block"><span className={labelCls}>GIF 帧数</span><input type="number" min={1} max={100} value={params.frame_count} onChange={(event) => setParams({ frame_count: Math.max(1, Number(event.target.value) || 1) })} className={fieldCls} /></label>
-                    <label className="block"><span className={labelCls}>每帧时长 (毫秒)</span><input type="number" min={20} max={10000} value={params.frame_duration_ms} onChange={(event) => setParams({ frame_duration_ms: Math.max(20, Number(event.target.value) || 20) })} className={fieldCls} /></label>
-                  </>}
+                  {params.output_format === 'gif' && <div className="col-span-2 grid grid-cols-2 gap-3">
+                    <label className="block"><span className={labelCls}>GIF 帧数</span><input type="number" min={2} max={16} value={params.frame_count} onChange={(event) => setParams({ frame_count: Math.max(2, Math.min(16, Number(event.target.value) || 2)) })} className={fieldCls} /></label>
+                    <label className="block"><span className={labelCls}>每帧时长 (毫秒)</span><input type="number" min={20} max={2000} value={params.frame_duration_ms} onChange={(event) => setParams({ frame_duration_ms: Math.max(20, Math.min(2000, Number(event.target.value) || 20)) })} className={fieldCls} /></label>
+                  </div>}
                 </div>
               </div>
             )}
