@@ -18,6 +18,7 @@ import {
 import type { ApiProfile, AppSettings } from '../types'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { useVersionCheck } from '../hooks/useVersionCheck'
+import { useUpstreamModels } from '../hooks/useUpstreamModels'
 import Select from './Select'
 import { getParamDisabledReasons } from '../lib/paramCompatibility'
 
@@ -116,6 +117,7 @@ export default function SettingsModal() {
   const [timeoutInput, setTimeoutInput] = useState(String(getActiveApiProfile(settings).timeout))
   const [showApiKey, setShowApiKey] = useState(false)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
+  const [modelIdInput, setModelIdInput] = useState('')
   const [tab, setTab] = useState<SettingsTab>('api')
   const params = useStore((s) => s.params)
   const setParams = useStore((s) => s.setParams)
@@ -124,6 +126,9 @@ export default function SettingsModal() {
 
   const apiProxyAvailable = isApiProxyAvailable(readClientDevProxyConfig())
   const activeProfile = draft.profiles.find((profile) => profile.id === draft.activeProfileId) ?? draft.profiles[0] ?? getActiveApiProfile(draft)
+  const { models: upstreamModels, loading: modelsLoading, error: modelsError, reload: reloadModels } = useUpstreamModels(activeProfile, showSettings)
+  const configuredModels = splitModelList(activeProfile.model)
+  const modelOptions = Array.from(new Set([...configuredModels, ...upstreamModels]))
   const apiProxyEnabled = apiProxyAvailable && activeProfile.provider === 'openai' && activeProfile.apiProxy
   const paramDisabled = getParamDisabledReasons(settings)
 
@@ -151,6 +156,10 @@ export default function SettingsModal() {
   useEffect(() => {
     setTimeoutInput(String(activeProfile.timeout))
   }, [activeProfile.id, activeProfile.timeout])
+
+  useEffect(() => {
+    setModelIdInput(getActiveApiProfile(draft).model)
+  }, [showSettings, activeProfile.id, activeProfile.model, activeProfile.selectedModel])
 
   const commitSettings = (nextDraft: AppSettings) => {
     const normalizedProfiles = nextDraft.profiles.map((profile) => {
@@ -631,17 +640,35 @@ export default function SettingsModal() {
                 )}
 
                 <div className="grid grid-cols-2 gap-2.5">
-                  <label className={`block min-w-0 ${activeProfile.provider !== 'openai' ? 'col-span-2' : ''}`}>
-                    <span className={labelCls}>模型 ID</span>
+                  <div className={`block min-w-0 ${activeProfile.provider !== 'openai' ? 'col-span-2' : ''}`}>
+                    <div className="flex items-center justify-between">
+                      <span className={labelCls}>模型 ID</span>
+                      {activeProfile.provider === 'openai' && <button type="button" onClick={reloadModels} disabled={!activeProfile.apiKey.trim() || modelsLoading} className="text-[10px] text-blue-500 disabled:text-gray-400">{modelsLoading ? '获取中…' : '刷新列表'}</button>}
+                    </div>
                     <input
-                      value={activeProfile.model}
-                      onChange={(e) => updateActiveProfile({ model: e.target.value })}
-                      onBlur={(e) => commitActiveProfilePatch({ model: e.target.value })}
+                      value={modelIdInput}
+                      onChange={(e) => setModelIdInput(e.target.value)}
+                      onBlur={(e) => {
+                        const enteredModels = splitModelList(e.target.value)
+                        if (!enteredModels.length) return setModelIdInput(getActiveApiProfile(draft).model)
+                        commitActiveProfilePatch({
+                          model: Array.from(new Set([...configuredModels, ...enteredModels])).join(', '),
+                          selectedModel: enteredModels[0],
+                        })
+                      }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
                       type="text"
+                      list={activeProfile.provider === 'openai' ? 'upstream-model-ids' : undefined}
                       placeholder={activeProfile.provider === 'fal' ? DEFAULT_FAL_MODEL : getDefaultModelForMode(apiMode)}
                       className={fieldCls}
                     />
-                  </label>
+                    {activeProfile.provider === 'openai' && <>
+                      <datalist id="upstream-model-ids">{upstreamModels.map((model) => <option key={model} value={model} />)}</datalist>
+                      <div className="mt-0.5 text-[10px] leading-tight text-gray-400 dark:text-gray-500" aria-live="polite">
+                        {modelsError || (upstreamModels.length ? `已从上游获取 ${upstreamModels.length} 个模型，可输入筛选` : modelsLoading ? '正在获取上游模型…' : activeProfile.apiKey.trim() ? '可手动输入模型 ID' : '填写 API 密钥后自动获取模型')}
+                      </div>
+                    </>}
+                  </div>
                   {activeProfile.provider === 'openai' ? (
                     <label className="block min-w-0">
                       <span className={labelCls}>超时 (秒)</span>
@@ -730,7 +757,7 @@ export default function SettingsModal() {
                   </label>}
                   <label className="block">
                     <span className={labelCls}>默认模型（{providerLabel(activeProfile.provider)}）</span>
-                    <Select value={getActiveApiProfile(draft).model} onChange={(value) => updateActiveProfile({ selectedModel: value }, true)} options={splitModelList(activeProfile.model).map((model) => ({ label: model, value: model }))} className={fieldCls} />
+                    <Select value={getActiveApiProfile(draft).model} onChange={(value) => updateActiveProfile({ model: configuredModels.includes(value) ? activeProfile.model : [...configuredModels, value].join(', '), selectedModel: value }, true)} options={modelOptions.map((model) => ({ label: model, value: model }))} className={fieldCls} />
                   </label>
                   {activeProfile.provider === 'openai' && apiMode === 'responses' && <label className="block min-w-0"><span className={labelCls}>出图模型 ID</span>
                     <input value={activeProfile.imageGenerationModel ?? ''} onChange={(e) => updateActiveProfile({ imageGenerationModel: e.target.value })} onBlur={(e) => commitActiveProfilePatch({ imageGenerationModel: e.target.value })} placeholder={DEFAULT_IMAGES_MODEL} className={fieldCls} />

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useStore, submitTask, stopBatchPrompts, addImageFromFile, getCachedImage, updateTaskInStore, removeMultipleTasks } from '../store'
 import { DEFAULT_PARAMS } from '../types'
 import { getActiveApiProfile, splitModelList } from '../lib/apiProfiles'
+import { useUpstreamModels } from '../hooks/useUpstreamModels'
 import { DEFAULT_FAL_IMAGE_SIZE, getChangedParams, getOutputImageLimitForSettings, getParamDisabledReasons, normalizeParamsForSettings } from '../lib/paramCompatibility'
 import { normalizeImageSize } from '../lib/size'
 import { createMaskPreviewDataUrl } from '../lib/canvasImage'
@@ -163,7 +164,9 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
   const batchPromptCount = settings.batchPromptEnabled ? splitBatchPrompts(prompt).length : 0
   const canSubmit = prompt.trim() && settings.apiKey && !batchProgress && (!settings.batchPromptEnabled || batchPromptCount >= 2)
   const activeProfile = getActiveApiProfile(settings)
-  const modelOptions = splitModelList(settings.profiles.find((profile) => profile.id === settings.activeProfileId)?.model ?? activeProfile.model)
+  const configuredModels = splitModelList(settings.profiles.find((profile) => profile.id === settings.activeProfileId)?.model ?? activeProfile.model)
+  const { models: upstreamModels } = useUpstreamModels(activeProfile)
+  const modelOptions = Array.from(new Set([...configuredModels, ...upstreamModels]))
   const activeProvider = activeProfile.provider
   const isFalProvider = activeProvider === 'fal'
   const paramDisabled = getParamDisabledReasons(settings)
@@ -1226,9 +1229,13 @@ export default function InputBar({ hideBatchProgress = false }: { hideBatchProgr
                 <select
                   aria-label="生成模型"
                   value={activeProfile.model}
-                  onChange={(event) => setSettings({ profiles: settings.profiles.map((profile) => profile.id === activeProfile.id ? { ...profile, selectedModel: event.target.value } : profile) })}
+                  onChange={(event) => setSettings({ profiles: settings.profiles.map((profile) => profile.id === activeProfile.id ? {
+                    ...profile,
+                    model: configuredModels.includes(event.target.value) ? profile.model : [...configuredModels, event.target.value].join(', '),
+                    selectedModel: event.target.value,
+                  } : profile) })}
                   disabled={Boolean(batchProgress)}
-                  title={modelOptions.length === 1 ? '在设置的 API 配置中用逗号添加更多模型' : undefined}
+                  title={modelOptions.length === 1 ? '在设置的 API 配置中添加模型，或等待上游模型列表加载' : undefined}
                   className="h-7 w-40 appearance-none rounded-lg border border-[#e4e4ec] bg-[#f6f6f9] pl-2.5 pr-7 text-xs font-medium text-[#18181b] outline-none focus:border-[#0d99ff] disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-100 sm:w-52"
                 >
                   {modelOptions.map((model) => <option key={model} value={model}>{model}</option>)}
